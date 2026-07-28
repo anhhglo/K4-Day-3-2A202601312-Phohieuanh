@@ -158,7 +158,7 @@ Nếu dữ liệu còn thiếu KHÔNG thể lấy bằng công cụ hiện có, 
 từ dữ liệu đã có thay vì cố gọi lại tool.
 
 Chỉ trả về JSON array các chuỗi, không giải thích thêm. Ví dụ:
-["Tra cứu thời tiết Hà Nội", "Tìm chuyến bay TP.HCM đến Hà Nội"]"""
+["Liệt kê đơn đang chờ duyệt của CC-ENG", "Lấy chi tiết đơn EXP-2026-0142"]"""
 
         raw = call_llm(self.provider, prompt)
         if is_provider_error(raw):
@@ -195,7 +195,7 @@ dữ liệu đã có mà không cần công cụ, đặt "tool" là null và vi�
 bằng tiếng Việt vào "answer".
 
 Chỉ trả về JSON, không giải thích:
-{{"tool": "get_weather", "args": {{"location": "Hà Nội"}}, "answer": null}}
+{{"tool": "get_policy", "args": {{"category": "an_uong"}}, "answer": null}}
 hoặc
 {{"tool": null, "args": {{}}, "answer": "nội dung tổng hợp bằng tiếng Việt"}}"""
 

@@ -141,6 +141,7 @@ BẮT ĐẦU:
 # đệm phòng khi LLM trả sai định dạng một lần.
 MAX_ITERATIONS = 8
 
-# Timeout cho mỗi lần gọi LLM (giây) — dùng ở tầng gọi mạng trong providers.py.
-# KHÔNG phải timeout cho tool: tool đều là hàm cục bộ chạy tức thì.
-TIMEOUT_SECONDS = 30
+# ⚠️ KHÔNG khai báo TIMEOUT_SECONDS ở đây. Tool đều là hàm cục bộ chạy tức thì nên
+# timeout ở tầng tool là vô nghĩa; timeout THẬT là timeout gọi mạng tới LLM và nó
+# sống ở đúng một nơi: providers.REQUEST_TIMEOUT_SECONDS. Một hằng số khai báo mà
+# không nơi nào đọc là guardrail giả — trông có phanh nhưng đạp không ăn.
