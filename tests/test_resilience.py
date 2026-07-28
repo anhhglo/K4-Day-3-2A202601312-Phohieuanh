@@ -532,3 +532,60 @@ def test_giao_dien_hong_khong_lam_chet_vong_lap(ba_key, monkeypatch):
     trace = run_react_agent("câu hỏi", providers.OpenAIProvider(), on_event=quan_sat_hong)
     assert trace["ok"] is True
     assert trace["answer"] == "Đã xong."
+
+
+# ======================================= MOCK PROVIDER — PHƯƠNG ÁN CỨU HỘ DEMO
+@pytest.mark.no_stub_tools
+def test_mock_di_tron_vong_react_chu_khong_tra_loi_ngay():
+    """`--mock` là phương án cứu hộ khi hết quota ngay trước giờ demo.
+
+    Nó phải DIỄN ĐƯỢC vòng lặp ReAct, không chỉ trả một câu rồi thôi — nếu không
+    thì lời hứa "mọi thứ hỏng hết thì chạy --mock" trong hướng dẫn là lời hứa rỗng.
+
+    Bản trước dò `"observation:" in prompt` để đoán đang ở giữa vòng lặp, nhưng
+    chính REACT_SYSTEM_PROMPT chứa chuỗi đó (quy tắc "TUYỆT ĐỐI không tự viết
+    Observation:") nên điều kiện luôn đúng ngay vòng đầu — Mock chưa bao giờ gọi
+    nổi một tool nào.
+    """
+    from app import run_react_agent
+
+    trace = run_react_agent("Đơn EXP-2026-0142 có duyệt được không?",
+                            providers.MockProvider())
+
+    assert len(trace["tools_called"]) >= 4, (
+        f"Mock chỉ gọi {len(trace['tools_called'])} tool: {trace['tools_called']}. "
+        f"Demo offline sẽ không cho thấy vòng lặp ReAct nào cả."
+    )
+    assert trace["tools_called"][0] == "get_expense_report"
+    assert "llm_error" not in trace["guardrails"]
+    assert trace["ok"] is True
+
+
+@pytest.mark.no_stub_tools
+def test_mock_bam_dung_ma_don_trong_cau_hoi():
+    """Hỏi đơn nào thì phải mở hồ sơ đơn đó, không cứng nhắc một mã duy nhất."""
+    from app import run_react_agent
+
+    trace = run_react_agent("Đơn EXP-2026-0145 có gì bất thường không?",
+                            providers.MockProvider())
+    assert "EXP-2026-0145" in trace["answer"]
+
+
+@pytest.mark.no_stub_tools
+def test_mock_luon_tu_nhan_la_gia_lap():
+    """Kết quả giả lập mà không nói rõ là giả lập thì tệ hơn một thông báo lỗi."""
+    from app import run_react_agent
+
+    trace = run_react_agent("Đơn EXP-2026-0142?", providers.MockProvider())
+    assert "GIẢ LẬP" in trace["answer"].upper()
+
+
+@pytest.mark.no_stub_tools
+def test_mock_khong_goi_tool_cho_cau_hoi_kien_thuc_chung():
+    """Câu không có mã đơn thì trả lời thẳng — đúng như agent thật được dạy."""
+    from app import run_react_agent
+
+    trace = run_react_agent("Quy trình duyệt chi phí gồm những bước nào?",
+                            providers.MockProvider())
+    assert trace["tools_called"] == []
+    assert trace["ok"] is True

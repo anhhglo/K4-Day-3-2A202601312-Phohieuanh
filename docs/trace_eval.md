@@ -271,7 +271,36 @@ docker-compose). Kết quả khảo sát mã nguồn AIchat:
 > ở Memory và Self-Evaluation, nhưng **thiếu đúng trụ Planning**. Đó chính là phần
 > bài lab này bổ sung.
 
-### 4.2. Mục tiêu demo Cấp 4
+### 4.2. Vai trò của Memory trong bài toán duyệt chi phí
+
+*(Mục này do vai Observability & Reviewer viết, giữ nguyên nội dung nghiệp vụ.)*
+
+Agent lưu lại các bước đã xử lý:
+
+* Các khoản chi đã đọc.
+* Chính sách đã tra cứu.
+* Các chứng từ còn thiếu.
+* Kết quả tính toán trung gian.
+
+Ví dụ hình dạng bộ nhớ:
+
+```json
+{
+  "expense_id": "EXP-2026-0142",
+  "approved_items": [
+    {"type": "an_uong", "amount": 2400000}
+  ],
+  "pending_items": [
+    {"type": "tiep_khach", "reason": "Vượt hạn mức 3.000.000 ₫/lần"}
+  ]
+}
+```
+
+Memory giúp agent tiếp tục xử lý ở phiên sau mà không cần đọc lại toàn bộ hồ sơ —
+và trong bài lab này, nó còn là thứ khiến ngân sách **hao dần** qua từng đơn được
+duyệt, tạo ra phụ thuộc giữa các đơn mà Cấp 3 không xử lý được.
+
+### 4.3. Mục tiêu demo Cấp 4
 
 ```text
 "Duyệt toàn bộ đơn chi phí đang tồn của phòng Engineering (cost center CC-ENG)
@@ -289,7 +318,7 @@ quyết định kết quả đơn thứ hai. Đó là chỗ Planning và Memory 
 `list_pending_reports` và `find_duplicate_claims` đổi kết quả sau mỗi lần
 `submit_decision` thành công.
 
-### 4.3. Ba cơ chế, kiểm chứng bằng test offline
+### 4.4. Ba cơ chế, kiểm chứng bằng test offline
 
 Toàn bộ Cấp 4 được phủ bởi `tests/test_autonomous.py` (27 test, chạy bằng
 `FakeProvider`, không tốn quota):
@@ -305,7 +334,7 @@ thấy** danh sách lời gọi đã thực hiện, nên cứ đề xuất lại
 guardrail chặn — vòng re-plan kẹt cứng và đốt sạch quota. Vá bằng
 `_executed_calls_digest()` nạp vào prompt Planner, mô phỏng Rule 3 của AIchat.
 
-### 4.4. Giới hạn đã biết — nói trước để khỏi bị hỏi vặn
+### 4.5. Giới hạn đã biết — nói trước để khỏi bị hỏi vặn
 
 * **Quota là ràng buộc thật, không phải cái cớ.** Free tier Gemini có **hai** hạn
   mức, đều tính riêng từng model: **5 request/phút** và **20 request/ngày**.
@@ -340,3 +369,30 @@ Sơ đồ đầy đủ: `docs/hybrid_flowchart.mermaid`. Bảng tín hiệu đ�
 **Quy tắc rút gọn cho người thuyết trình:** *Chatbot trả lời **kiến thức**, Agent
 trả lời **số liệu**.* Câu nào mà Chatbot trả lời được bằng một con số cụ thể của
 công ty thì đó là dấu hiệu nó đang bịa.
+
+---
+
+## 🏁 6. KẾT LUẬN CHUNG
+
+Bài toán **Trợ Lý Duyệt Chi Phí Doanh Nghiệp** đạt **19/20 điểm Agentic Fit**, rất
+phù hợp với kiến trúc **ReAct Agent** vì cần:
+
+* suy luận nhiều bước,
+* sử dụng công cụ nghiệp vụ,
+* ra quyết định động,
+* kiểm soát lỗi và chống hallucination.
+
+Trace quan sát cho thấy agent không chỉ trả lời câu hỏi mà còn thực hiện đúng quy
+trình nghiệp vụ tài chính:
+
+**kiểm tra chứng từ → đối chiếu chính sách → kiểm tra ngân sách → dò trùng lặp →
+quyết định duyệt hoặc yêu cầu bổ sung hồ sơ.**
+
+Điều này chứng minh mô hình Agentic AI mang lại giá trị thực tế cao hơn chatbot
+truyền thống trong bài toán **duyệt chi phí doanh nghiệp**.
+
+> **Một điều nhóm không tuyên bố quá lời:** agent làm đúng quy trình không có
+> nghĩa là nó không bao giờ sai. Nó vẫn có thể diễn giải sai một con số trong phần
+> văn xuôi của Final Answer — prompt chỉ giảm chứ không diệt được. Thứ nhóm kiểm
+> chứng được bằng máy là: mọi con số đưa ra đều truy ngược được về một Observation
+> có thật, và không quyết định nào được ghi khi chưa đủ ba tiền đề.

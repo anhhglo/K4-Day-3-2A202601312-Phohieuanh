@@ -487,18 +487,72 @@ class FallbackProvider(BaseLLMProvider):
 
 
 class MockProvider(BaseLLMProvider):
-    """Offline Mock Provider cho bộ test offline"""
+    """Provider giả lập offline — đi trọn một vòng ReAct thật, không gọi mạng.
+
+    Dùng cho `python src/web_demo.py --mock` và cho nấc cuối của
+    `ResilientProvider`. Đây là phương án cứu hộ khi hết quota hoặc mất mạng ngay
+    trước giờ demo, nên nó phải **diễn được vòng lặp ReAct**, không chỉ trả một
+    câu rồi thôi.
+
+    ⚠️ Bản trước dò `"observation:" in prompt` để đoán đang ở giữa vòng lặp.
+    Nhưng chính REACT_SYSTEM_PROMPT có chứa chuỗi đó (ở quy tắc "TUYỆT ĐỐI không
+    tự viết Observation:"), nên điều kiện luôn đúng ngay từ vòng đầu — Mock chưa
+    bao giờ gọi nổi một tool nào, kể cả cho case vốn cần 4 tool. Nay đếm số
+    Observation trong phần SCRATCHPAD (khúc sau "Câu hỏi:") để biết đang ở bước
+    mấy, thay vì dò cả prompt.
+    """
+
+    #: Chuỗi tool mô phỏng đúng thứ tự một agent thật đi qua.
+    KICH_BAN = [
+        ("get_expense_report", "Cần mở hồ sơ đơn chi phí trước khi kết luận."),
+        ("get_policy", "Đã có chi tiết đơn, giờ tra chính sách hạng mục."),
+        ("check_budget", "Kiểm tra ngân sách cost center còn đủ không."),
+        ("find_duplicate_claims", "Dò trùng lặp và dấu hiệu xé nhỏ hoá đơn."),
+    ]
+
     def generate(self, prompt: str, system_prompt: str = "") -> str:
-        text = prompt.lower()
-        da_co_observation = "observation:" in text
-        if "exp-" in text and not da_co_observation:
-            return ("Thought: Cần mở hồ sơ đơn chi phí trước khi kết luận.\n"
-                    "Action: get_expense_report[EXP-2026-0142]")
-        if ("chính sách" in text or "hạn mức" in text) and not da_co_observation:
-            return ("Thought: Cần tra chính sách hạng mục.\n"
-                    "Action: get_policy[an_uong]")
-        return ("Thought: Đây là phản hồi giả lập offline.\n"
-                "Final Answer: 🤖 [Mock Provider] Phản hồi giả lập offline cho bài test.")
+        # Chỉ nhìn phần hội thoại, bỏ qua system prompt.
+        hoi_thoai = prompt.split("Câu hỏi:", 1)[-1]
+        buoc = hoi_thoai.count("Observation:")
+
+        ma_don = re.search(r"(EXP-\d{4}-\d{4})", hoi_thoai, re.I)
+        if not ma_don:
+            return ("Thought: Câu hỏi này là kiến thức chung, không cần tra hệ thống.\n"
+                    "Final Answer: 🤖 [Mock Provider — KẾT QUẢ GIẢ LẬP] Quy trình duyệt "
+                    "chi phí thường gồm: nộp chứng từ, đối chiếu chính sách, kiểm tra "
+                    "ngân sách, phê duyệt theo thẩm quyền.")
+        don = ma_don.group(1).upper()
+
+        if buoc < len(self.KICH_BAN):
+            ten_tool, suy_nghi = self.KICH_BAN[buoc]
+
+            # Tham số bóc từ chính Observation trước đó cho khớp ngữ cảnh; không
+            # bóc được thì dùng giá trị mặc định có sẵn trong mock data.
+            def _bat(mau, mac_dinh):
+                khop = re.search(mau, hoi_thoai)
+                return khop.group(1) if khop else mac_dinh
+
+            hang_muc = _bat(r"\[(\w+)\]", "an_uong")
+            cost_center = _bat(r"(CC-[A-Z]+)", "CC-ENG")
+            nhan_vien = _bat(r"(EMP-\d+)", "EMP-001")
+            # Vendor nằm ngay sau `[hạng_mục] ` và trước ` |` trong dòng line item.
+            # Dùng [^|\n] để không cho khớp vắt qua nhiều dòng — nếu không nó vớ
+            # phải "Số dòng: 1" ở dòng tổng bên trên.
+            vendor = _bat(r"\]\s*([^|\n]+?)\s*\|", "Nhà hàng Ngon")
+
+            tham_so = {
+                "get_expense_report": don,
+                "get_policy": hang_muc,
+                "check_budget": f"{cost_center}, 2400000",
+                "find_duplicate_claims": f"{nhan_vien}, {vendor}",
+            }[ten_tool]
+            return f"Thought: {suy_nghi}\nAction: {ten_tool}[{tham_so}]"
+
+        return ("Thought: Đã thu thập đủ dữ liệu từ bốn công cụ bắt buộc.\n"
+                f"Final Answer: 🤖 [Mock Provider — KẾT QUẢ GIẢ LẬP, KHÔNG PHẢI LLM THẬT] "
+                f"NEEDS_INFO cho đơn {don}. Đây là phản hồi dựng sẵn để demo vòng lặp "
+                f"ReAct khi không gọi được LLM — con số và kết luận KHÔNG phản ánh dữ "
+                f"liệu thật của đơn.")
 
 
 class ResilientProvider(BaseLLMProvider):

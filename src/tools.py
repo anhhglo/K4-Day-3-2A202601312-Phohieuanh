@@ -103,6 +103,31 @@ _REPORTS = {
              "co_hoa_don_vat": True, "thanh_toan": "chuyen_khoan", "pre_approved": False},
         ],
     },
+    # Trùng với EXP-2026-0125 đã thanh toán trong lịch sử: cùng nhân viên, cùng
+    # vendor, cùng số tiền. Đây là dữ liệu cho case 9 — kiểu gian lận nộp hai lần
+    # cùng một hoá đơn, chỉ lộ khi đối chiếu lịch sử.
+    "EXP-2026-0147": {
+        "employee_id": "EMP-005", "employee": "Vũ Hoàng Nam",
+        "cost_center": "CC-SALES", "ngay_nop": "2026-07-26",
+        "items": [
+            {"ngay": "2026-07-10", "category": "cong_tac",
+             "vendor": "Vietnam Airlines",
+             "so_luong": 1, "don_gia": 6_800_000, "so_tien": 6_800_000,
+             "co_hoa_don_vat": True, "thanh_toan": "chuyen_khoan", "pre_approved": True},
+        ],
+    },
+    # Tiếp khách 18,5tr: đơn giá VƯỢT hạn mức 3tr/lần của hạng mục tiep_khach nên
+    # đúng ra là REJECTED theo R1. Nhưng pre_approved=True và có hoá đơn VAT, nên
+    # trường hợp này cần người duyệt giải trình thêm -> NEEDS_INFO. Dữ liệu cho case 10.
+    "EXP-2026-0148": {
+        "employee_id": "EMP-005", "employee": "Vũ Hoàng Nam",
+        "cost_center": "CC-SALES", "ngay_nop": "2026-07-27",
+        "items": [
+            {"ngay": "2026-07-25", "category": "tiep_khach", "vendor": "Khách sạn Metropole",
+             "so_luong": 1, "don_gia": 18_500_000, "so_tien": 18_500_000,
+             "co_hoa_don_vat": True, "thanh_toan": "chuyen_khoan", "pre_approved": True},
+        ],
+    },
 }
 
 # ============================================================ LỊCH SỬ
@@ -112,6 +137,11 @@ _CLAIM_HISTORY = [
     {"report_id": "EXP-2026-0131", "employee_id": "EMP-002",
      "vendor": "Công ty TNHH Tin học Phương Nam",
      "so_tien": 12_000_000, "ngay": "2026-06-30", "trang_thai": "APPROVED"},
+    # Cặp trùng của EXP-2026-0147: cùng EMP-005, cùng Vietnam Airlines, cùng
+    # 6.800.000 ₫ — chuyến công tác này đã được thanh toán một lần rồi.
+    {"report_id": "EXP-2026-0125", "employee_id": "EMP-005",
+     "vendor": "Vietnam Airlines",
+     "so_tien": 6_800_000, "ngay": "2026-07-12", "trang_thai": "APPROVED"},
 ]
 
 # Nơi submit_decision ghi quyết định vào (in-memory).
