@@ -126,8 +126,11 @@ lớp chống hallucination của AIchat.
 
 ### 3.4. Giới hạn đã biết
 
-* Free tier Gemini giới hạn **5 request/phút mỗi model** → agent có `call_llm()`
-  retry/backoff đọc `retryDelay` từ lỗi 429. Một lần chạy đầy đủ mất 2-4 phút.
+* Free tier Gemini có **hai** hạn mức, đều tính riêng từng model: **5 request/phút**
+  và **20 request/ngày**. `call_llm()` retry/backoff xử lý được hạn mức phút (đọc
+  `retryDelay` từ lỗi 429), nhưng hết hạn mức NGÀY thì phải đổi model
+  (`--model gemini-3.5-flash-lite`) hoặc chờ sang hôm sau. Một lần chạy đầy đủ
+  mất 2-4 phút.
 * Registry chỉ có 2 tool nên mục tiêu "vé khứ hồi" vốn không giải được — chính giới
   hạn này tạo ra trace 3.3.
 * `data/agent_memory.json` bị ghi đè mỗi lần chạy (bộ nhớ theo từng mục tiêu, chưa

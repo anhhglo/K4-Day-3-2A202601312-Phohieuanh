@@ -18,20 +18,19 @@ import json
 import os
 import re
 import sys
-import time
 
 # Cho phép import tools.py / providers.py nằm ở thư mục src/ cha
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools import AVAILABLE_TOOLS  # noqa: E402
 from providers import get_llm_provider, OpenAIProvider  # noqa: E402
+from llm_utils import call_llm, is_provider_error  # noqa: E402
 
 # 🛡️ GUARDRAILS — phanh an toàn, tương ứng MAX_TOTAL_ITERATIONS / MAX_CONSECUTIVE_FAILURES của AIchat
 MAX_STEPS = 6                 # Tổng số bước thực thi tối đa cho cả mục tiêu
 MAX_REPLANS = 2               # Số lần được phép lập lại kế hoạch
 MAX_CONSECUTIVE_FAILURES = 3  # Số lần tool lỗi liên tiếp thì dừng khẩn cấp
 EVAL_THRESHOLD = 0.5          # Điểm tự đánh giá dưới ngưỡng này ⇒ coi như bước hỏng
-MAX_LLM_RETRIES = 3           # Số lần thử lại khi LLM trả 429 (hết quota)
 
 MEMORY_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data"
@@ -55,33 +54,6 @@ def _extract_json(text: str):
         return json.loads(match.group(0))
     except json.JSONDecodeError:
         return None
-
-
-def _is_provider_error(text: str) -> bool:
-    """providers.py trả chuỗi '[... Error]' / '[... Exception]' thay vì raise."""
-    return bool(text) and bool(re.match(r"^\[\w+ (Error|Exception)\]", text.strip()))
-
-
-def _retry_delay(err: str) -> float:
-    """Bóc 'retryDelay': '25s' từ thông báo 429 của Gemini; mặc định 20 giây."""
-    match = re.search(r"retryDelay'?[:\s\"']+(\d+(?:\.\d+)?)s", err)
-    return float(match.group(1)) + 1 if match else 20.0
-
-
-def call_llm(provider, prompt: str, retries: int = MAX_LLM_RETRIES) -> str:
-    """Gọi LLM có retry/backoff — free tier Gemini chỉ cho 5 request/phút mỗi model."""
-    for attempt in range(retries + 1):
-        out = provider.generate(prompt)
-        if not _is_provider_error(out):
-            return out
-        if "429" not in out and "RESOURCE_EXHAUSTED" not in out:
-            return out  # Lỗi khác (401, 404...) — retry vô ích
-        if attempt == retries:
-            return out
-        wait = _retry_delay(out)
-        print(f"⏳ [RateLimit] Hết quota, chờ {wait:.0f}s rồi thử lại ({attempt + 1}/{retries})...")
-        time.sleep(wait)
-    return out
 
 
 def _build_judge_provider():
@@ -184,7 +156,7 @@ Chỉ trả về JSON array các chuỗi, không giải thích thêm. Ví dụ:
 ["Tra cứu thời tiết Hà Nội", "Tìm chuyến bay TP.HCM đến Hà Nội"]"""
 
         raw = call_llm(self.provider, prompt)
-        if _is_provider_error(raw):
+        if is_provider_error(raw):
             print(f"❌ [Planning] Không gọi được LLM: {raw[:160]}")
             return []
 
@@ -223,7 +195,7 @@ hoặc
 {{"tool": null, "args": {{}}, "answer": "nội dung tổng hợp bằng tiếng Việt"}}"""
 
         raw = call_llm(self.provider, prompt)
-        if _is_provider_error(raw):
+        if is_provider_error(raw):
             return {"tool": None, "observation": raw, "ok": False}
 
         decision = _extract_json(raw)
@@ -326,7 +298,7 @@ Viết câu trả lời cuối cùng bằng TIẾNG VIỆT cho người dùng. C
 thật trong dữ liệu trên, TUYỆT ĐỐI không bịa thêm. Không viết tiền tố
 "Final Answer:" hay "Thought:"."""
         answer = call_llm(self.provider, prompt)
-        if _is_provider_error(answer):
+        if is_provider_error(answer):
             return f"⚠️ Không tổng hợp được câu trả lời cuối: {answer}"
         return answer.strip()
 
