@@ -36,8 +36,13 @@ MEMORY_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data"
 )
 
-TOOL_SPECS = """- get_weather(location: str): Tra cứu thời tiết hiện tại của một thành phố. Hỗ trợ 'Hà Nội', 'TP.HCM', 'Đà Nẵng'.
-- search_flights(origin: str, destination: str): Tra cứu chuyến bay và giá vé giữa 2 thành phố."""
+TOOL_SPECS = """- get_expense_report(report_id: str): Lấy chi tiết một đơn chi phí.
+- get_policy(category: str): Tra chính sách hạng mục (hạn mức, ngưỡng hoá đơn, pre-approval).
+- check_budget(cost_center: str, amount: str): Kiểm tra ngân sách còn lại.
+- find_duplicate_claims(employee_id: str, vendor: str): Dò trùng lặp & xé nhỏ hoá đơn.
+- get_approval_matrix(amount: str): Tra cấp có thẩm quyền duyệt (DoA).
+- submit_decision(report_id: str, decision: str, reason: str): Ghi quyết định.
+- list_pending_reports(cost_center: str): Liệt kê đơn đang chờ duyệt."""
 
 
 def _extract_json(text: str):
@@ -368,7 +373,9 @@ thật trong dữ liệu trên, TUYỆT ĐỐI không bịa thêm. Không viết
 if __name__ == "__main__":
     print("=== DEMO CẤP ĐỘ 4: AUTONOMOUS AGENT (Planning + Self-Eval + Memory) ===\n")
     agent = AutonomousAgent(
-        "Lên kế hoạch chuyến đi Hà Nội 3 ngày 2 đêm khởi hành từ TP.HCM: "
-        "cần biết thời tiết điểm đến, chuyến bay phù hợp và gợi ý trang phục."
+        "Duyệt toàn bộ đơn chi phí đang tồn của phòng Engineering (cost center CC-ENG) "
+        "trong quý này. Với mỗi đơn phải tra chính sách, kiểm tra ngân sách còn lại và "
+        "dò trùng lặp trước khi kết luận. Ngân sách HAO DẦN sau mỗi đơn được duyệt — "
+        "phải trừ đi số đã duyệt trước khi xét đơn tiếp theo."
     )
     agent.run()

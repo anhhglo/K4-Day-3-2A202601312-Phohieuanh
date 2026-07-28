@@ -114,7 +114,12 @@ Phần D có plan riêng: `docs/superpowers/plans/2026-07-28-part-D-core-integra
 | **Test cho Cấp 4 — phần bonus +10%** | D10 | 17 test |
 | `MockProvider` sang domain chi phí | D11 | Chạy offline có nghĩa |
 
-**Tổng 58 test, chạy offline hoàn toàn, dưới 2 giây, không tốn quota.**
+**✅ ĐÃ XONG 2026-07-28: 85 test, 0.10 giây, xanh toàn bộ, không tốn quota.**
+Còn chờ B và C để chạy nghiệm thu 7 case thật và demo Cấp 4.
+
+> ⚠️ **A lưu ý khi viết `tests/test_judge.py`:** KHÔNG tạo `tests/__init__.py`.
+> Có nó thì `tests/` thành package và `from conftest import ...` sẽ báo
+> `ModuleNotFoundError`. Fixture dùng chung đã có sẵn ở `tests/conftest.py`.
 
 **Bốn lỗi đỏ D phải vá** (đã kiểm chứng bằng đầu vào thật, không phải phỏng đoán):
 

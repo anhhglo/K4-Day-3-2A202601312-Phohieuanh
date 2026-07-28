@@ -1329,6 +1329,63 @@ git commit -m "fix(mock): MockProvider trả kịch bản domain chi phí thay v
 | `max_iterations` | Hết số vòng cho phép | `test_cham_tran_max_iterations` |
 | `scratchpad_truncated` | Scratchpad vượt 6000 ký tự | `test_scratchpad_bi_cat_khi_qua_dai` |
 
+---
+
+## ✅ TRẠNG THÁI THỰC HIỆN — đã xong 2026-07-28
+
+**85 test, 0.10 giây, xanh toàn bộ, không tốn một lượt quota nào.**
+
+```
+tests/test_parser.py       28 passed
+tests/test_guardrails.py   21 passed
+tests/test_llm_utils.py     9 passed
+tests/test_autonomous.py   27 passed
+```
+
+### Bốn điều chỉnh so với plan, phát sinh khi thực hiện
+
+**1. Bỏ `tests/__init__.py`** *(ngược với Task 0 của plan chung)*
+Có `__init__.py` thì `tests/` thành package, và `from conftest import ...` báo
+`ModuleNotFoundError`. Không có nó thì pytest tự thêm thư mục test vào `sys.path`.
+Người A cũng cần biết điều này khi viết `tests/test_judge.py`.
+
+**2. Thêm `tests/conftest.py` với registry giả** *(không có trong plan)*
+Plan ban đầu để test guardrail chạy trên `tools.py` thật của B. Như vậy hỏng ở hai
+đầu: D không làm được gì cho tới khi B xong, và mỗi lần B chỉnh một con số trong
+mock data là test của D đỏ oan. Nay D chạy trên registry giả 7 tool đúng tên đúng
+arity, do chính D kiểm soát.
+
+**3. `TEST_MAX_ITERATIONS = 8` đặt trong `conftest.py`, không đọc từ `prompts.py`**
+`prompts.MAX_ITERATIONS` hiện vẫn là 3 (C chưa nâng lên 8). Chuỗi đầy đủ cần 5 tool
++ 1 vòng kết luận nên 6 test guardrail đỏ oan vì hằng số của người khác. Test của D
+tự kiểm soát ngân sách vòng lặp.
+
+**4. Chuyển fixture chặn `time.sleep` lên `conftest.py`, autouse toàn bộ**
+`test_planner_khong_sap_khi_provider_loi` để provider giả trả lỗi 429, làm `call_llm`
+ngủ **thật 20 giây**. Một test như vậy biến cả bộ từ 0,1 giây thành 20 giây — đủ để
+người ta bỏ thói quen chạy test trước khi commit.
+
+### Sửa thêm ngoài phạm vi test
+
+* `src/app.py` bỏ `from tools import ..., get_weather, search_flights` — hai tên này
+  chỉ còn ở dòng import. Khi B viết lại `tools.py` thì `app.py` sẽ crash ngay lúc
+  import. Nay chỉ còn `AVAILABLE_TOOLS`.
+* `MockProvider` thêm điều kiện `da_co_observation` — nếu không, chạy offline nó sẽ
+  gọi tool lặp mãi tới khi chạm trần `MAX_ITERATIONS`.
+
+### Còn phụ thuộc B và C
+
+Ba việc chưa nghiệm thu được cho tới khi B xong `tools.py` và C xong `prompts.py`:
+
+* Chạy `python src/run_tests.py` với 7 case thật *(cần cả A, B, C)*
+* Chạy `python src/ai_levels/level4_autonomous_agent.py` *(cần 7 tool của B)*
+* Xác nhận `MAX_ITERATIONS = 8` đủ cho case 3 đi hết 5 tool *(cần C)*
+
+Kiểm tra đã làm thay: smoke test `run_tests.py` với `LLM_PROVIDER=mock` xác nhận dây
+nối `run_tests → app → tools → judge` còn nguyên vẹn.
+
+---
+
 ### Tổng hợp test của phần D
 
 | File test | Nội dung | Số test |
