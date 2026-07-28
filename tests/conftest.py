@@ -19,6 +19,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 
 import llm_utils  # noqa: E402
+import tools as _tools  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def reset_decisions():
+    """Dọn `tools._DECISIONS` trước và sau MỌI test.
+
+    `_DECISIONS` là state toàn cục: một khi `submit_decision` ghi vào đó thì
+    `list_pending_reports` và `find_duplicate_claims` đổi kết quả. Đúng ý đồ cho
+    Cấp 4 (ngân sách hao dần), nhưng là bẫy nhiễm chéo giữa các test — test chạy
+    trước làm test chạy sau đỏ oan, và thứ tự chạy đổi là kết quả đổi.
+    """
+    _tools._DECISIONS.clear()
+    yield
+    _tools._DECISIONS.clear()
 
 
 @pytest.fixture(autouse=True)

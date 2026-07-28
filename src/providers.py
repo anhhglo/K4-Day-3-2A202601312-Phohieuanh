@@ -193,23 +193,66 @@ def call_llm_with_fallback(system_prompt: str, user_message: str, verbose: bool 
 # ===========================================================================
 
 class BaseLLMProvider:
-    """Interface cơ sở cho tất cả các LLM Provider"""
+    """Interface cơ sở cho tất cả các LLM Provider.
+
+    GIAO KÈO QUAN TRỌNG: `generate` LỖI thì phải TRẢ VỀ chuỗi dạng
+    '[X Exception]: ...' chứ KHÔNG được raise. Cả `llm_utils.is_provider_error`
+    lẫn cơ chế retry 429 và guardrail `llm_error` của vòng lặp ReAct đều dựa vào
+    giao kèo này — provider nào raise sẽ làm sập cả vòng lặp thay vì được xử lý
+    tử tế.
+    """
     def generate(self, prompt: str, system_prompt: str = "") -> str:
         raise NotImplementedError
 
 
-class GeminiProvider(BaseLLMProvider):
-    """Google Gemini Provider đóng vai trò Fallback"""
-    def __init__(self, api_key: str = None, model: str = None):
-        pass
-    def generate(self, prompt: str, system_prompt: str = "") -> str:
+def _goi_an_toan(system_prompt: str, prompt: str, nhan: str) -> str:
+    """Bọc `call_llm_with_fallback` để đổi exception thành chuỗi lỗi đúng giao kèo.
+
+    Giữ nguyên từ khoá '429' / 'RESOURCE_EXHAUSTED' trong thông báo khi lỗi là do
+    hết quota, để `call_llm` biết đây là trường hợp đáng retry.
+    """
+    try:
         return call_llm_with_fallback(system_prompt, prompt, verbose=False)
+    except ProviderQuotaError as e:
+        return f"[{nhan} Exception]: Error code: 429 - RESOURCE_EXHAUSTED {e}"
+    except ProviderError as e:
+        return f"[{nhan} Exception]: {e}"
+    except Exception as e:  # noqa: BLE001 — mạng chập chờn, JSON hỏng...
+        return f"[{nhan} Exception]: {type(e).__name__}: {e}"
+
+
+class GeminiProvider(BaseLLMProvider):
+    """Google Gemini Provider (đi qua cơ chế failover)."""
+    def __init__(self, api_key: str = None, model: str = None):
+        self.api_key = api_key or GEMINI_API_KEY
+        self.model_name = model or GEMINI_MODEL
+
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        return _goi_an_toan(system_prompt, prompt, "Gemini")
+
+
+class OpenAIProvider(BaseLLMProvider):
+    """Provider tương thích OpenAI.
+
+    Cấp 4 dùng lớp này để tách Evaluator sang một model phụ
+    (`OpenAIProvider(model=LAB_MINI_MODEL)`) — quota free tier tính riêng theo
+    từng model nên judge không ăn vào hạn mức của agent chính.
+    """
+    def __init__(self, api_key: str = None, model: str = None):
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self.model_name = model or os.environ.get("LLM_MODEL") or GROQ_MODEL
+
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        return _goi_an_toan(system_prompt, prompt, "OpenAI")
 
 
 class FallbackProvider(BaseLLMProvider):
     """Fallback Provider sử dụng cơ chế failover Groq/Gemini"""
+    def __init__(self, model: str = None):
+        self.model_name = model or f"{GROQ_MODEL} → {GEMINI_MODEL}"
+
     def generate(self, prompt: str, system_prompt: str = "") -> str:
-        return call_llm_with_fallback(system_prompt, prompt, verbose=False)
+        return _goi_an_toan(system_prompt, prompt, "Fallback")
 
 
 class MockProvider(BaseLLMProvider):
