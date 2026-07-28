@@ -7,9 +7,7 @@
     "expected_decision": null,
     "min_tools": 0,
     "max_tools": 0,
-    "forbidden_tools": [
-      "submit_decision"
-    ]
+    "forbidden_tools": ["submit_decision"]
   },
   {
     "id": 2,
@@ -19,9 +17,7 @@
     "expected_decision": null,
     "min_tools": 0,
     "max_tools": 0,
-    "forbidden_tools": [
-      "submit_decision"
-    ]
+    "forbidden_tools": ["submit_decision"]
   },
   {
     "id": 3,
@@ -71,8 +67,6 @@
     "expected_decision": null,
     "min_tools": 0,
     "max_tools": 7,
-    "forbidden_tools": [
-      "submit_decision"
-    ]
+    "forbidden_tools": ["submit_decision"]
   }
 ]
