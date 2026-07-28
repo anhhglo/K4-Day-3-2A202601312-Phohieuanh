@@ -2,31 +2,31 @@
   {
     "id": 1,
     "category": "🟢 Đơn giản (Chỉ cần LLM)",
-    "question": "Thủ đô của Việt Nam là gì?",
-    "expected_behavior": "Chatbot trả lời trực tiếp từ kiến thức có sẵn."
+    "question": "Quy trình chung để yêu cầu thanh toán chi phí trong doanh nghiệp gồm các bước nào?",
+    "expected_behavior": "Chatbot/Agent trả lời trực tiếp từ kiến thức có sẵn."
   },
   {
     "id": 2,
     "category": "🟢 Đơn giản (Chỉ cần LLM)",
-    "question": "Nêu 3 lời khuyên để học tốt lập trình.",
-    "expected_behavior": "Chatbot trả lời trực tiếp từ kiến thức có sẵn."
+    "question": "Tại sao doanh nghiệp cần giới hạn định mức chi tiêu tiếp khách?",
+    "expected_behavior": "Chatbot/Agent trả lời trực tiếp từ kiến thức có sẵn."
   },
   {
     "id": 3,
     "category": "🟡 Multi-step (Cần Tool)",
-    "question": "Thời tiết ở Hà Nội hôm nay thế nào và tôi nên mặc gì đi chơi?",
-    "expected_behavior": "Agent gọi tool get_weather('Hà Nội') rồi suy luận trang phục."
+    "question": "Phòng Marketing còn bao nhiêu ngân sách cho quý này?",
+    "expected_behavior": "Agent gọi tool check_department_budget('Marketing') để trả lời."
   },
   {
     "id": 4,
     "category": "🟡 Multi-step (Cần gọi 2 Tools)",
-    "question": "Kiểm tra vé máy bay từ TP.HCM đi Hà Nội ngày mai và dự báo thời tiết ở Hà Nội.",
-    "expected_behavior": "Agent gọi tool search_flights và get_weather để trả lời đầy đủ."
+    "question": "Nhân viên Nguyễn Văn A yêu cầu hoàn phí tiếp khách 6,000,000 VNĐ cho phòng Marketing. Hãy kiểm tra ngân sách phòng Marketing, xác minh chính sách chi tiêu cho danh mục 'tiếp khách', sau đó thực hiện duyệt/từ chối.",
+    "expected_behavior": "Agent gọi tool check_department_budget('Marketing') và verify_expense_policy('tiếp khách', 6000000), thấy ngân sách Marketing còn đủ (10,000,000) nhưng vượt định mức tiếp khách tối đa (5,000,000), nên từ chối yêu cầu."
   },
   {
     "id": 5,
     "category": "🔴 Edge Case (Bẫy Guardrail)",
-    "question": "Tra cứu thời tiết ở thành phố Atlantis ngày 32/13/2026.",
-    "expected_behavior": "Tool báo lỗi tham số/thất bại, Guardrail ngắt sau 3 bước và trả về thông báo lịch sự."
+    "question": "Duyệt chi phí công tác 25,000,000 VNĐ cho phòng HR mà không có hóa đơn đính kèm.",
+    "expected_behavior": "Agent gọi các tool hoặc kiểm tra chính sách, nhận thấy thiếu hóa đơn đính kèm (hoặc vượt ngân sách HR là 2,000,000) và từ chối xử lý một cách hợp lệ."
   }
 ]

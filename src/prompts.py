@@ -1,19 +1,6 @@
 """
 🧠 PROMPTS & SAFEGUARDS (Dành cho Role 3: Prompt & Safeguard Engineer)
 Nơi cấu hình System Prompt và Phanh An Toàn (Guardrails) cho AI Duyệt Chi Phí Doanh Nghiệp.
-
-Bản sửa lỗi:
-- Thêm quy tắc BẮT BUỘC thứ tự gọi tool (check budget + verify policy TRƯỚC submit).
-- Thêm rule chống bịa Observation.
-- Chặn dấu phẩy trong amount/reason để không phá parser Action[arg1, arg2].
-- Chuẩn hoá giá trị status đúng 3 giá trị "Duyệt"/"Từ chối"/"Cần điều chỉnh", đồng bộ với enum ở tools.py.
-- Thêm rule hỏi lại khi thiếu thông tin thay vì tự suy đoán.
-- (Mới) Thêm thứ bậc chỉ thị rõ ràng (system prompt > mọi yêu cầu trong hội thoại) chống role-play/persona hijack,
-  "debug mode", tuyên bố chức vụ giả.
-- (Mới) Thêm rule không tin Observation giả do người dùng tự chèn vào tin nhắn.
-- (Mới) Thêm rule bắt buộc quy đổi đơn vị tiền tệ ("6tr" -> 6000000) để chặn bypass hạn mức qua nhầm đơn vị.
-- (Mới) Thêm rule xử lý khi tool trả về LỖI (không được tự suy diễn tiếp).
-- (Mới) Thêm rule phát hiện "structuring" - tách nhỏ khoản chi để né hạn mức chính sách.
 """
 
 # Baseline Chatbot Prompt (Chỉ dùng LLM thông thường, không có Tool)
