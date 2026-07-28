@@ -153,6 +153,48 @@ class MockProvider(BaseLLMProvider):
                 "Final Answer: 🤖 [Mock Provider] Phản hồi giả lập offline cho bài test.")
 
 
+class GroqProvider(BaseLLMProvider):
+    """Groq Provider (Llama-3)"""
+    def __init__(self, api_key: str = None, model: str = None):
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+        self.model_name = model or os.getenv("LLM_MODEL") or "llama-3.3-70b-versatile"
+        
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        if not self.api_key:
+            return "[Groq Error]: Chưa cấu hình GROQ_API_KEY trong file .env!"
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": self.model_name,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0,
+            }
+            resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+            if resp.status_code == 429:
+                return f"[Groq Error] Groq rate-limit (429): {resp.text[:200]}"
+            if resp.status_code != 200:
+                return f"[Groq Error] Groq lỗi HTTP {resp.status_code}: {resp.text[:200]}"
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            return f"[Groq Exception]: {str(e)}"
+
+
+class FallbackProvider(BaseLLMProvider):
+    """Fallback Provider that wraps Groq and Gemini calling with fallback logic"""
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        try:
+            return call_llm_with_fallback(system_prompt, prompt, verbose=False)
+        except Exception as e:
+            return f"[Fallback Exception]: {str(e)}"
+
+
 def get_llm_provider(provider_name: str = None) -> BaseLLMProvider:
     """Factory function tự chọn Provider từ biến môi trường LLM_PROVIDER"""
     name = (provider_name or os.getenv("LLM_PROVIDER") or "mock").lower().strip()
@@ -165,8 +207,138 @@ def get_llm_provider(provider_name: str = None) -> BaseLLMProvider:
         return AnthropicProvider()
     elif name == "openrouter":
         return OpenRouterProvider()
+    elif name == "groq":
+        return GroqProvider()
+    elif name == "fallback":
+        return FallbackProvider()
     else:
         return MockProvider()
+
+
+# ---------------------------------------------------------------------------
+# Cấu hình từng provider phục vụ call_llm_with_fallback
+# ---------------------------------------------------------------------------
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+
+REQUEST_TIMEOUT_SECONDS = 30  # timeout gọi mạng tới LLM
+COOLDOWN_SECONDS = 60         # sau khi 1 provider báo hết quota, tạm bỏ qua nó bao nhiêu giây
+
+# Thứ tự ưu tiên thử: Groq trước (nhanh, quota/phút cao hơn), Gemini là dự phòng.
+PROVIDER_ORDER = ["groq", "gemini"]
+
+class ProviderQuotaError(Exception):
+    """Provider báo hết quota / bị rate-limit (HTTP 429 hoặc lỗi tương đương)."""
+
+class ProviderError(Exception):
+    """Lỗi khác không liên quan tới quota (thiếu key, lỗi mạng, sai định dạng phản hồi...)."""
+
+import time
+# Lưu thời điểm 1 provider bị đánh dấu hết quota -> tạm bỏ qua nó tới hết COOLDOWN_SECONDS
+_cooldown_until = {name: 0.0 for name in PROVIDER_ORDER}
+
+
+def _call_groq(system_prompt: str, user_message: str) -> str:
+    api_key = os.environ.get("GROQ_API_KEY", "") or GROQ_API_KEY
+    if not api_key:
+        raise ProviderError("Thiếu GROQ_API_KEY trong biến môi trường (.env).")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+        "temperature": 0,
+    }
+    resp = requests.post(GROQ_URL, headers=headers, json=payload, timeout=REQUEST_TIMEOUT_SECONDS)
+
+    if resp.status_code == 429:
+        raise ProviderQuotaError(f"Groq rate-limit (429): {resp.text[:200]}")
+    if resp.status_code != 200:
+        raise ProviderError(f"Groq lỗi HTTP {resp.status_code}: {resp.text[:200]}")
+
+    data = resp.json()
+    try:
+        return data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError) as e:
+        raise ProviderError(f"Groq trả về định dạng không như mong đợi: {e}")
+
+
+def _call_gemini(system_prompt: str, user_message: str) -> str:
+    api_key = os.environ.get("GEMINI_API_KEY", "") or GEMINI_API_KEY
+    if not api_key:
+        raise ProviderError("Thiếu GEMINI_API_KEY trong biến môi trường (.env).")
+
+    params = {"key": api_key}
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_prompt}]},
+        "contents": [{"role": "user", "parts": [{"text": user_message}]}],
+        "generationConfig": {"temperature": 0},
+    }
+    resp = requests.post(GEMINI_URL, params=params, json=payload, timeout=REQUEST_TIMEOUT_SECONDS)
+
+    if resp.status_code == 429:
+        raise ProviderQuotaError(f"Gemini rate-limit (429): {resp.text[:200]}")
+    if resp.status_code != 200:
+        raise ProviderError(f"Gemini lỗi HTTP {resp.status_code}: {resp.text[:200]}")
+
+    data = resp.json()
+    try:
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError) as e:
+        raise ProviderError(f"Gemini trả về định dạng không như mong đợi: {e}")
+
+
+_CALLERS = {
+    "groq": _call_groq,
+    "gemini": _call_gemini,
+}
+
+
+def call_llm_with_fallback(system_prompt: str, user_message: str, verbose: bool = True) -> str:
+    """
+    Gọi LLM với khả năng tự động chuyển provider khi bị rate-limit/hết quota.
+    """
+    now = time.time()
+    errors = []
+
+    for name in PROVIDER_ORDER:
+        if now < _cooldown_until[name]:
+            if verbose:
+                remaining = int(_cooldown_until[name] - now)
+                print(f"[providers] Bỏ qua '{name}' - đang cooldown thêm {remaining}s.")
+            continue
+
+        try:
+            if verbose:
+                print(f"[providers] Đang gọi '{name}'...")
+            text = _CALLERS[name](system_prompt, user_message)
+            if verbose:
+                print(f"[providers] '{name}' trả lời thành công.")
+            return text
+        except ProviderQuotaError as e:
+            print(f"[providers] '{name}' HẾT QUOTA -> tự động chuyển sang provider kế tiếp. ({e})")
+            _cooldown_until[name] = time.time() + COOLDOWN_SECONDS
+            errors.append(f"{name}: {e}")
+            continue
+        except ProviderError as e:
+            print(f"[providers] '{name}' lỗi -> thử provider kế tiếp. ({e})")
+            errors.append(f"{name}: {e}")
+            continue
+
+    raise ProviderError(
+        "TẤT CẢ provider đều thất bại hoặc đang cooldown:\n" + "\n".join(errors)
+    )
 
 
 if __name__ == "__main__":
@@ -175,3 +347,4 @@ if __name__ == "__main__":
     print(f"✅ Provider đang dùng: {provider.__class__.__name__}")
     print(f"🤖 User Query: Hello")
     print(f"💬 Response  : {provider.generate('Hello')}")
+
