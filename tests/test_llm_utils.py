@@ -35,6 +35,38 @@ class Seq:
         return self.outs.pop(0) if self.outs else "cạn kịch bản"
 
 
+LOI_RONG = ("[OpenAI Exception]: EMPTY_RESPONSE: model 'gemini-3.5-flash-lite' trả về "
+            "nội dung rỗng (finish_reason='stop', khoá có trong message: "
+            "['extra_content', 'role']). Đây là lỗi tạm thời, đáng thử lại.")
+
+
+def test_thu_lai_khi_model_tra_noi_dung_rong():
+    """Gemini 3 thỉnh thoảng trả message không có 'content' — chạy lại là được.
+
+    Không retry thì mỗi lần như vậy là một vòng ReAct chết oan, và với case cần
+    đủ 5 tool thì mất một vòng là hụt luôn kết luận.
+    """
+    p = Seq([LOI_RONG, "Thought: ok\nFinal Answer: xong"])
+    ket_qua = call_llm(p, "câu hỏi")
+
+    assert ket_qua == "Thought: ok\nFinal Answer: xong"
+    assert p.so_lan == 2
+
+
+def test_khong_cho_20_giay_khi_chi_la_response_rong(khong_ngu_that):
+    """Response rỗng không phải hết quota — chờ lâu là phí thời gian demo."""
+    p = Seq([LOI_RONG, "xong"])
+    call_llm(p, "câu hỏi")
+
+    assert khong_ngu_that == [2.0], (
+        f"Chờ {khong_ngu_that} giây cho một lỗi không liên quan tới quota."
+    )
+
+
+def test_retry_delay_cho_response_rong_la_2_giay():
+    assert _retry_delay(LOI_RONG) == 2.0
+
+
 def test_nhan_dien_loi_provider():
     assert is_provider_error(LOI_429)
     assert is_provider_error(LOI_401)

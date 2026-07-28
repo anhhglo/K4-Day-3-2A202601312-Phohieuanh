@@ -22,8 +22,25 @@ def is_provider_error(text: str) -> bool:
     return bool(text) and bool(re.match(r"^\[\w+ (Error|Exception)\]", text.strip()))
 
 
+#: Lỗi tạm thời đáng thử lại. '429'/'RESOURCE_EXHAUSTED' là hết quota theo phút;
+#: 'EMPTY_RESPONSE' là khi model thinking trả message không có nội dung — chạy lại
+#: cùng prompt thì thành công, xem chú thích trong `providers._call_openai_compat`.
+LOI_DANG_THU_LAI = ("429", "RESOURCE_EXHAUSTED", "EMPTY_RESPONSE", "NETWORK_DOWN",
+                    "SERVER_BUSY")
+
+
 def _retry_delay(err: str) -> float:
     """Bóc 'retryDelay': '25s' từ thông báo 429 của Gemini; mặc định 20 giây."""
+    # Response rỗng không phải chuyện quota — chờ 20 giây là phí. Thử lại ngay.
+    if "EMPTY_RESPONSE" in err:
+        return 2.0
+    # Mạng chập chờn thường tự hồi trong vài giây. Chờ 20 giây cho một lần rớt
+    # wifi là biến sự cố 3 giây thành khoảng lặng 1 phút giữa lúc đang trình bày.
+    if "NETWORK_DOWN" in err:
+        return 3.0
+    # Máy chủ quá tải thường tự khỏi rất nhanh. Chờ 20 giây là bỏ lỡ lúc nó vừa rảnh.
+    if "SERVER_BUSY" in err:
+        return 4.0
     match = re.search(r"retryDelay'?[:\s\"']+(\d+(?:\.\d+)?)s", err)
     return float(match.group(1)) + 1 if match else 20.0
 
@@ -36,7 +53,7 @@ def call_llm(provider, prompt: str, system_prompt: str = "", retries: int = MAX_
             else provider.generate(prompt)
         if not is_provider_error(out):
             return out
-        if "429" not in out and "RESOURCE_EXHAUSTED" not in out:
+        if not any(dau_hieu in out for dau_hieu in LOI_DANG_THU_LAI):
             return out  # Lỗi khác (401, 404...) — retry vô ích
         if attempt == retries:
             return out
