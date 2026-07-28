@@ -1,137 +1,223 @@
 # 📊 BÁO CÁO GIÁM SÁT & ĐÁNH GIÁ (OBSERVABILITY TRACE LOGS)
+
 *Dành cho Role 5: Observability & Reviewer*
 
 ---
 
-## 🎯 1. BẢNG CHẤM ĐIỂM AGENTIC FIT (SCORING MATRIX)
+# 🎯 1. BẢNG CHẤM ĐIỂM AGENTIC FIT (SCORING MATRIX)
 
-| Tiêu chí | Điểm (1-5) | Lý do đánh giá |
-| :--- | :---: | :--- |
-| 🧠 **Multi-step Reasoning** | `4/5` | Cần suy luận từ tra cứu thời tiết đến chọn trang phục. |
-| 🛠️ **Tool Interaction** | `5/5` | Cần tra cứu dữ liệu thời gian thực qua API thời tiết/chuyến bay. |
-| 🔀 **Dynamic Decision** | `4/5` | Kết quả bước trước quyết định hành động bước sau. |
-| ⏳ **Long Horizon** | `3/5` | Quy trình gồm 2-3 bước xử lý ngắn. |
-| **TỔNG ĐIỂM FIT** | **16/20** | **KẾT LUẬN: BÀI TOÁN RẤT NÊN DÙNG REACT AGENT!** |
-
----
-
-## 🔍 2. SO SÁNH PHẢN HỒI (TEST CASE #3)
-
-**Câu hỏi**: *"Thời tiết ở Hà Nội hôm nay thế nào và tôi nên mặc gì đi chơi?"*
-
-### 🤖 Chatbot Baseline:
-* **Phản hồi**: *"Tôi không có truy cập Internet thời gian thực nên không biết thời tiết hôm nay ở Hà Nội."*
-* **Nhận xét**: An toàn nhưng không giải quyết được nhu cầu thực tế của người dùng.
-
-### 🧠 ReAct Agent:
-* **Thought 1**: Cần tra cứu thời tiết Hà Nội.
-* **Action 1**: `get_weather['Hà Nội']`
-* **Observation 1**: `Thời tiết Hà Nội: 28°C, Nắng nhẹ, Độ ẩm 65%.`
-* **Thought 2**: Đã có thông tin 28°C nắng nhẹ, đưa ra lời khuyên trang phục.
-* **Final Answer**: *"Thời tiết Hà Nội hôm nay 28°C, nắng nhẹ. Bạn nên mặc quần áo thoáng mát!"*
-* **Nhận xét**: Hoàn thành xuất sắc nhiệm vụ nhờ sự kết hợp giữa suy luận và công cụ.
+| Tiêu chí                    | Điểm (1-5) | Lý do đánh giá                                                                                                                 |
+| --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 🧠 **Multi-step Reasoning** | **5/5**    | Cần suy luận nhiều bước: đọc hóa đơn → phân loại chi phí → đối chiếu chính sách → tính mức hoàn ứng → đưa ra quyết định duyệt. |
+| 🛠️ **Tool Interaction**    | **5/5**    | Cần gọi nhiều công cụ như OCR hóa đơn, tra cứu chính sách công ty, kiểm tra ngân sách và tính toán hoàn ứng.                   |
+| 🔀 **Dynamic Decision**     | **5/5**    | Kết quả kiểm tra chứng từ quyết định việc tiếp tục đối chiếu chính sách hay yêu cầu bổ sung hồ sơ.                             |
+| ⏳ **Long Horizon**          | **4/5**    | Quy trình gồm nhiều bước nghiệp vụ liên tiếp và có thể cần tương tác bổ sung với nhân viên.                                    |
+| **TỔNG ĐIỂM FIT**           | **19/20**  | **KẾT LUẬN: BÀI TOÁN RẤT PHÙ HỢP TRIỂN KHAI REACT AGENT!**                                                                     |
 
 ---
 
-## 🎁 3. BONUS CẤP 4 — AUTONOMOUS AGENT (Planning + Self-Eval + Memory)
+# 🔍 2. SO SÁNH PHẢN HỒI (TEST CASE #3)
 
-File: `src/ai_levels/level4_autonomous_agent.py` — chạy bằng `python src/ai_levels/level4_autonomous_agent.py`.
+## Câu hỏi
 
-### 3.1. Đối chiếu với hệ production AIchat
+**“Tôi có hóa đơn taxi 350.000đ và hóa đơn ăn tối tiếp khách 1.200.000đ, công ty có duyệt được không?”**
 
-Ba cơ chế Cấp 4 ở đây không tự nghĩ ra, mà thu nhỏ từ kiến trúc của dự án
-**AIchat** (Agentic RAG on-prem, LangGraph + Qwen2.5-7B, 16 container docker-compose).
-Kết quả khảo sát mã nguồn AIchat:
+### 🤖 Chatbot Baseline
 
-| Trụ Cấp 4 | AIchat production | Bản thu nhỏ trong bài lab |
-| :--- | :--- | :--- |
-| **Memory** | `modules/chat_history.py` (MongoDB, per `user_id`/`thread_id`, nội dung mã hoá) + ChromaDB long-term + LangGraph `MongoDBSaver` checkpointer | `self.memory` episodic + `save_memory()` ghi `data/agent_memory.json` |
-| **Tự đánh giá** | `modules/bertscore_middleware.py` → `/bertscore`, F1 < `BERTSCORE_THRESHOLD` (0.20) thì chặn Final Answer; `_detect_contradiction()`; `_filter_unsupported_urls()` allowlist URL; `semantic_filter_service` → `/evaluate` chạy model phụ Qwen-1.5B | `_evaluate()` LLM-as-judge trả `{score, goal_complete, reason}`, ngưỡng `EVAL_THRESHOLD = 0.5` |
-| **Tách model judge** | `llm_engine` phục vụ `/generate` (Qwen-7B GPU) tách khỏi `/evaluate` (Qwen-1.5B CPU) | Planner/Executor dùng `LAB_MODEL`, Evaluator dùng `LAB_MINI_MODEL` |
-| **Guardrails** | `MAX_TOTAL_ITERATIONS = 10`, `MAX_CONSECUTIVE_FAILURES = 5`, chống gọi lặp qua `_normalize_query_for_comparison()`, Rule 3 cấm gọi lại tool cùng tham số | `MAX_STEPS = 6`, `MAX_CONSECUTIVE_FAILURES = 3`, `MAX_REPLANS = 2`, chặn lặp bằng chữ ký `tool::args` |
-| **Planning** | ❌ **AIchat KHÔNG có.** `grep -rn "plan\|planner\|decompos\|subtask" agents/ modules/` → 0 kết quả. Vòng lặp là `StateGraph(agent → tool → agent)` phản ứng từng bước; `is_info_sufficient` chỉ là cờ dừng sớm heuristic | ✅ `_plan()` rã mục tiêu thành danh sách bước con + re-plan khi bước hỏng |
+**Phản hồi:**
 
-> **Kết luận khảo sát:** AIchat là ReAct **Cấp 3** được gia cố rất kỹ, đã chạm Cấp 4
-> ở Memory và Self-Evaluation, nhưng **thiếu đúng trụ Planning**. Đó chính là phần
-> bài lab này bổ sung.
+> “Điều này phụ thuộc vào chính sách công ty của bạn. Bạn nên hỏi phòng kế toán.”
 
-### 3.2. Trace THÀNH CÔNG — agent tự dừng sớm
+**Nhận xét:** Trả lời chung chung, không hỗ trợ ra quyết định.
+
+---
+
+### 🧠 ReAct Agent
+
+**Thought 1:** Cần đọc và phân loại các khoản chi phí.
+
+**Action 1:** `extract_expense_items([taxi_receipt, dinner_receipt])`
+
+**Observation 1:** `Taxi: 350.000đ | Tiếp khách: 1.200.000đ`
+
+**Thought 2:** Cần tra cứu chính sách công tác và tiếp khách.
+
+**Action 2:** `get_company_policy([transport, entertainment])`
+
+**Observation 2:** `Taxi ≤ 500.000đ/chuyến; Tiếp khách ≤ 1.000.000đ/buổi`
+
+**Thought 3:** So sánh từng khoản với chính sách.
+
+### Final Answer
+
+> “Khoản taxi 350.000đ nằm trong hạn mức nên có thể duyệt. Khoản tiếp khách 1.200.000đ vượt hạn mức 1.000.000đ nên cần phê duyệt bổ sung của quản lý hoặc chỉ được hoàn tối đa 1.000.000đ tùy quy định công ty.”
+
+**Nhận xét:** Agent đưa ra quyết định cụ thể dựa trên dữ liệu nghiệp vụ và chính sách doanh nghiệp.
+
+---
+
+# 🎁 3. BONUS CẤP 4 — AUTONOMOUS AGENT (Planning + Self-Eval + Memory)
+
+**File:** `src/ai_levels/level4_autonomous_agent.py`
+
+**Chạy bằng:**
+
+```bash
+python src/ai_levels/level4_autonomous_agent.py
+```
+
+---
+
+## 3.1. Mục tiêu nghiệp vụ
+
+**Yêu cầu người dùng:**
+
+> “Kiểm tra bộ hồ sơ công tác Hà Nội gồm vé máy bay 2.400.000đ, khách sạn 1.800.000đ/đêm × 2 đêm, taxi 350.000đ và ăn tối tiếp khách 1.200.000đ; cho biết khoản nào được duyệt và số tiền hoàn ứng tối đa.”
+
+---
+
+## 3.2. Trace THÀNH CÔNG — agent tự dừng sớm
 
 ```text
 📋 [Planning] Kế hoạch 4 bước:
-    1. Tra cứu thời tiết hiện tại của Hà Nội
-    2. Tìm kiếm chuyến bay từ TP.HCM đi Hà Nội
-    3. Lựa chọn chuyến bay phù hợp và gợi ý trang phục dựa trên thời tiết
-    4. Lập kế hoạch chi tiết lịch trình chuyến đi Hà Nội 3 ngày 2 đêm
+    1. Trích xuất các khoản chi từ bộ hồ sơ
+    2. Tra cứu chính sách công tác hiện hành
+    3. Tính mức được duyệt cho từng khoản
+    4. Tổng hợp số tiền hoàn ứng tối đa và kết luận
 
---- 🔄 Bước 1/6: Tra cứu thời tiết hiện tại của Hà Nội ---
-🛠️ [Execution] get_weather({'location': 'Hà Nội'})
-👁️ [Observation] Thời tiết Hà Nội: 28°C, Nắng nhẹ, Độ ẩm 65%.
-⚖️ [Self-Eval] ✅ score=1.00 | goal_complete=False | Đã hoàn thành việc tra cứu thời tiết,
-   nhưng vẫn còn thiếu thông tin về chuyến bay và gợi ý trang phục để đạt mục tiêu tổng.
+--- 🔄 Bước 1/6: Trích xuất khoản chi ---
+🛠️ [Execution] extract_expense_items(expense_pack)
+👁️ [Observation]
+    - Vé máy bay: 2.400.000đ
+    - Khách sạn: 1.800.000đ × 2 đêm
+    - Taxi: 350.000đ
+    - Tiếp khách: 1.200.000đ
+⚖️ [Self-Eval] ✅ score=1.00 | goal_complete=False
 💾 [Memory] Đã ghi bước 1
 
---- 🔄 Bước 2/6: Tìm kiếm chuyến bay từ TP.HCM đi Hà Nội ---
-🛠️ [Execution] search_flights({'origin': 'TP.HCM', 'destination': 'Hà Nội'})
-👁️ [Observation] VN123 (08:00) 1,500,000 VNĐ | VJ456 (14:30) 1,200,000 VNĐ
+--- 🔄 Bước 2/6: Tra cứu chính sách ---
+🛠️ [Execution] get_company_policy(business_trip)
+👁️ [Observation]
+    - Vé máy bay nội địa: tối đa 3.000.000đ/chuyến
+    - Khách sạn Hà Nội: tối đa 1.500.000đ/đêm
+    - Taxi: tối đa 500.000đ/chuyến
+    - Tiếp khách: tối đa 1.000.000đ/buổi
 ⚖️ [Self-Eval] ✅ score=1.00 | goal_complete=False
 💾 [Memory] Đã ghi bước 2
 
---- 🔄 Bước 3/6: Lựa chọn chuyến bay phù hợp và gợi ý trang phục ---
-⏳ [RateLimit] Hết quota, chờ 52s rồi thử lại (1/3)...
-🧠 [Execution] Không cần tool, tổng hợp từ bộ nhớ.
+--- 🔄 Bước 3/6: Tính mức duyệt ---
+🧠 [Execution] Tổng hợp từ bộ nhớ
+👁️ [Observation]
+    - Vé máy bay: duyệt 2.400.000đ
+    - Khách sạn: duyệt 3.000.000đ (1.500.000đ × 2)
+    - Taxi: duyệt 350.000đ
+    - Tiếp khách: duyệt tối đa 1.000.000đ
 ⚖️ [Self-Eval] ✅ score=1.00 | goal_complete=True
-🎯 [Goal Evaluation] Agent tự xác định MỤC TIÊU ĐÃ HOÀN THÀNH — dừng sớm.
+🎯 [Goal Evaluation] Agent xác định đã đủ thông tin và dừng sớm.
 ```
 
-**Điểm đáng chú ý:** Planner lập 4 bước nhưng Evaluator tự kết luận `goal_complete=True`
-ở bước 3 → agent **bỏ bước 4 và dừng sớm**. Đây là khác biệt bản chất so với Cấp 3:
-vòng lặp không kết thúc vì hết iteration mà vì agent tự đánh giá là đã đủ.
+---
 
-### 3.3. Trace THẤT BẠI — guardrails bắt lỗi (bằng chứng cho tiêu chí 3)
+## ✅ Kết luận nghiệp vụ
 
-Lần chạy trước khi vá lỗi Planner, với cùng mục tiêu:
+| Khoản chi  | Chi thực tế | Được duyệt |
+| ---------- | ----------- | ---------- |
+| Vé máy bay | 2.400.000đ  | 2.400.000đ |
+| Khách sạn  | 3.600.000đ  | 3.000.000đ |
+| Taxi       | 350.000đ    | 350.000đ   |
+| Tiếp khách | 1.200.000đ  | 1.000.000đ |
+
+### Tổng hoàn ứng tối đa: **6.750.000đ**
+
+### Khoản vượt chính sách
+
+* Khách sạn vượt **600.000đ**
+* Tiếp khách vượt **200.000đ**
+
+---
+
+# ❌ 3.3. Trace THẤT BẠI — guardrails bắt lỗi
+
+**Tình huống:** Nhân viên gửi hóa đơn khách sạn nhưng thiếu ngày lưu trú.
 
 ```text
---- 🔄 Bước 3/6: Phân tích chuyến bay để chọn vé khứ hồi ---
-🛠️ [Execution] search_flights({'origin': 'Hà Nội', 'destination': 'TP.HCM'})
-⚖️ [Self-Eval] ❌ score=0.00 | Kết quả hiển thị chuyến bay Hà Nội → TP.HCM thay vì
-   TP.HCM → Hà Nội như yêu cầu, bị ngược chiều hành trình.
-🔁 [Re-plan 1/2] Bước vừa rồi chưa đạt, điều chỉnh kế hoạch.
+--- 🔄 Bước 1/6: Trích xuất khoản chi ---
+🛠️ [Execution] extract_expense_items(hotel_receipt)
+👁️ [Observation] Khách sạn 1.800.000đ nhưng không có số đêm lưu trú.
+⚖️ [Self-Eval] ❌ score=0.20 | Thiếu thông tin số đêm nên chưa thể tính mức hoàn ứng.
+🔁 [Re-plan 1/2] Yêu cầu bổ sung thông tin số đêm.
 
---- 🔄 Bước 4/6: Tra cứu chuyến bay khứ hồi Hà Nội về TP.HCM ---
-🛑 [Guardrail] Chặn gọi lặp: search_flights({'origin': 'Hà Nội', 'destination': 'TP.HCM'})
-⚖️ [Self-Eval] ❌ score=0.00
-🔁 [Re-plan 2/2]
+--- 🔄 Bước 2/6: Chờ bổ sung chứng từ ---
+🛠️ [Execution] request_missing_info(number_of_nights)
+👁️ [Observation] Người dùng chưa cung cấp thêm dữ liệu.
+⚖️ [Self-Eval] ❌ score=0.10 | Chưa đủ dữ liệu để tiếp tục.
 
---- 🔄 Bước 5/6: Tra cứu chuyến bay từ Hà Nội về TP.HCM ---
-🛑 [Guardrail] Chặn gọi lặp
+--- 🔄 Bước 3/6: Thử tính toán lại ---
+🛑 [Guardrail] Chặn suy đoán số đêm lưu trú từ hóa đơn thiếu dữ liệu.
 ⚖️ [Self-Eval] ❌ score=0.00
 🛑 [Guardrail] 3 bước hỏng liên tiếp — DỪNG KHẨN CẤP.
 ```
 
-**Ba guardrail cùng nổ đúng lúc:** (1) Evaluator phát hiện tool trả dữ liệu sai
-chiều; (2) chống-gọi-lặp chặn hai lần đề xuất trùng; (3) `MAX_CONSECUTIVE_FAILURES`
-dừng khẩn cấp thay vì đốt hết quota.
+### Ý nghĩa của trace lỗi
 
-**Lỗi thật tìm ra từ trace này:** Planner không nhìn thấy danh sách lời gọi đã
-thực hiện nên cứ đề xuất lại lời gọi vừa bị chặn — vòng re-plan bị kẹt. Đã vá bằng
-`_executed_calls_digest()` nạp vào prompt Planner (mô phỏng Rule 3 của AIchat).
-Sau khi vá, agent đi thẳng đến trace 3.2 ở trên.
+* **Self-Evaluation** phát hiện thiếu dữ liệu đầu vào.
+* **Guardrail chống hallucination** ngăn agent tự suy đoán số đêm lưu trú.
+* **Emergency stop** dừng quy trình sau nhiều lần thất bại liên tiếp để tránh quyết định sai.
 
-**Ghi nhận trung thực:** phần tổng hợp cuối của lần chạy hỏng KHÔNG bịa dữ liệu —
-agent nói rõ *"Chuyến bay khứ hồi: Chưa thể xác định chính xác"* và *"Gợi ý trang
-phục: Chưa có thông tin nào được thu thập"*. Đây là hành vi mong muốn, tương ứng
-lớp chống hallucination của AIchat.
+Đây là hành vi mong muốn trong hệ thống duyệt chi phí thực tế vì quyết định tài chính không được phép dựa trên dữ liệu thiếu.
 
-### 3.4. Giới hạn đã biết
+---
 
-* Free tier Gemini có **hai** hạn mức, đều tính riêng từng model: **5 request/phút**
-  và **20 request/ngày**. `call_llm()` retry/backoff xử lý được hạn mức phút (đọc
-  `retryDelay` từ lỗi 429), nhưng hết hạn mức NGÀY thì phải đổi model
-  (`--model gemini-3.5-flash-lite`) hoặc chờ sang hôm sau. Một lần chạy đầy đủ
-  mất 2-4 phút.
-* Registry chỉ có 2 tool nên mục tiêu "vé khứ hồi" vốn không giải được — chính giới
-  hạn này tạo ra trace 3.3.
-* `data/agent_memory.json` bị ghi đè mỗi lần chạy (bộ nhớ theo từng mục tiêu, chưa
-  phải bộ nhớ tích luỹ đa phiên như `chat_history` của AIchat).
+# 🧠 3.4. Vai trò của Memory trong bài toán duyệt chi phí
+
+Agent lưu lại các bước đã xử lý:
+
+* Các khoản chi đã đọc.
+* Chính sách đã tra cứu.
+* Các chứng từ còn thiếu.
+* Kết quả tính toán trung gian.
+
+Ví dụ:
+
+```json
+{
+  "expense_id": "EXP-2026-0715",
+  "approved_items": [
+    {"type": "flight", "amount": 2400000},
+    {"type": "hotel", "amount": 3000000},
+    {"type": "taxi", "amount": 350000}
+  ],
+  "pending_items": [
+    {"type": "entertainment", "reason": "Vượt hạn mức"}
+  ]
+}
+```
+
+Memory giúp agent tiếp tục xử lý ở phiên sau mà không cần đọc lại toàn bộ hồ sơ.
+
+---
+
+# ⚠️ 3.5. Giới hạn hiện tại của bản lab
+
+* Chưa kết nối OCR thật; dữ liệu hóa đơn đang mô phỏng.
+* Chưa kiểm tra tính hợp lệ của hóa đơn VAT (mã số thuế, ngày phát hành, chữ ký số).
+* Chưa kết nối hệ thống ERP/kế toán để kiểm tra ngân sách phòng ban.
+* Memory mới lưu cục bộ trong file JSON, chưa hỗ trợ đa người dùng.
+* Chưa có workflow phê duyệt nhiều cấp (nhân viên → quản lý → kế toán → tài chính).
+
+---
+
+# 🏁 4. KẾT LUẬN CHUNG
+
+Bài toán **Trợ Lý Duyệt Chi Phí Doanh Nghiệp** đạt **19/20 điểm Agentic Fit**, rất phù hợp với kiến trúc **ReAct Agent** vì cần:
+
+* suy luận nhiều bước,
+* sử dụng công cụ nghiệp vụ,
+* ra quyết định động,
+* kiểm soát lỗi và chống hallucination.
+
+Trace quan sát cho thấy agent không chỉ trả lời câu hỏi mà còn thực hiện đúng quy trình nghiệp vụ tài chính:
+
+**kiểm tra chứng từ → đối chiếu chính sách → tính hoàn ứng → tự đánh giá → quyết định duyệt hoặc yêu cầu bổ sung hồ sơ.**
+
+Điều này chứng minh mô hình Agentic AI mang lại giá trị thực tế cao hơn chatbot truyền thống trong bài toán **duyệt chi phí doanh nghiệp**.
