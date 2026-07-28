@@ -94,9 +94,87 @@ def submit_expense_approval(claim_id: str, status: str, reason: str) -> str:
         return f"LỖI: Trạng thái '{status}' không hợp lệ. Phải là 'Duyệt' hoặc 'Từ chối'."
 
 
+# Dữ liệu mock bổ sung cho 4 tool mới
+REPORT_DB = {
+    "EXP-001": {
+        "employee": "Nguyễn Văn An",
+        "department": "IT",
+        "amount": 2500000,
+        "category": "tiếp khách",
+        "status": "PENDING"
+    },
+    "EXP-002": {
+        "employee": "Trần Thị Bình",
+        "department": "HR",
+        "amount": 12000000,
+        "category": "công tác",
+        "status": "PENDING"
+    }
+}
+
+CLAIM_HISTORY = [
+    {"employee": "Nguyễn Văn An", "vendor": "Grab", "amount": 850000, "date": "2026-07-20"},
+    {"employee": "Trần Thị Bình", "vendor": "Công ty TNHH Tin học Phương Nam", "amount": 12000000, "date": "2026-06-30"},
+]
+
+
+def get_expense_report(report_id: str) -> str:
+    """Trả về thông tin chi tiết của một expense report theo mã đơn."""
+    report = REPORT_DB.get(report_id)
+    if not report:
+        return f"LỖI: Không tìm thấy expense report '{report_id}'."
+    return (
+        f"Expense Report {report_id}: nhân viên={report['employee']}, phòng={report['department']}, "
+        f"số tiền={report['amount']:,} VNĐ, danh mục={report['category']}, trạng thái={report['status']}"
+    )
+
+
+def get_policy(category: str) -> str:
+    """Trả về chính sách hạn mức cho một hạng mục chi phí."""
+    cat_lower = category.strip().lower()
+    for cat, limit in POLICY_DB.items():
+        if cat.lower() == cat_lower:
+            return f"Chính sách '{cat}': hạn mức tối đa {limit:,} VNĐ/lần."
+    return f"LỖI: Không tìm thấy chính sách cho danh mục '{category}'."
+
+
+def check_budget(department: str, amount: float) -> str:
+    """Kiểm tra ngân sách còn lại của phòng ban cho một khoản chi."""
+    dep_lower = department.strip().lower()
+    for dep, budget in BUDGET_DB.items():
+        if dep.lower() == dep_lower:
+            try:
+                val_amount = float(amount)
+            except (TypeError, ValueError):
+                return f"LỖI: Số tiền '{amount}' không hợp lệ."
+            remaining = budget - val_amount
+            if remaining >= 0:
+                return f"Ngân sách còn lại của phòng {dep} là {remaining:,.0f} VNĐ sau khi chi {val_amount:,.0f} VNĐ."
+            return f"LỖI: Phòng {dep} không đủ ngân sách. Còn lại {remaining:,.0f} VNĐ."
+    return f"LỖI: Không tìm thấy phòng ban '{department}'."
+
+
+def find_duplicate_claims(employee: str, vendor: str) -> str:
+    """Tìm các claim trùng lặp theo nhân viên và vendor."""
+    matches = [
+        item for item in CLAIM_HISTORY
+        if item["employee"].lower() == employee.strip().lower() and item["vendor"].lower() == vendor.strip().lower()
+    ]
+    if not matches:
+        return f"Không tìm thấy claim trùng cho nhân viên '{employee}' và vendor '{vendor}'."
+    lines = [f"Tìm thấy {len(matches)} claim trùng:"]
+    for item in matches:
+        lines.append(f"- {item['employee']} | {item['vendor']} | {item['amount']:,} VNĐ | ngày {item['date']}")
+    return "\n".join(lines)
+
+
 # Danh sách các tool được đăng ký để Agent sử dụng
 AVAILABLE_TOOLS = {
     "check_department_budget": check_department_budget,
     "verify_expense_policy": verify_expense_policy,
     "submit_expense_approval": submit_expense_approval,
+    "get_expense_report": get_expense_report,
+    "get_policy": get_policy,
+    "check_budget": check_budget,
+    "find_duplicate_claims": find_duplicate_claims,
 }
