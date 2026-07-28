@@ -1,6 +1,16 @@
-google-genai
-openai
-anthropic
-python-dotenv
+# Toàn bộ dự án chỉ cần BA gói này.
+#
+# Mọi lời gọi LLM đi qua `requests` thuần tới endpoint OpenAI-compatible
+# (xem src/providers.py), KHÔNG dùng SDK của nhà cung cấp nào. Giao diện web
+# (src/web_demo.py) dùng http.server của thư viện chuẩn — không FastAPI, không
+# uvicorn, không npm.
+#
+# Ít gói = ít thứ hỏng trên máy người khác đúng lúc sắp demo.
+# Đã kiểm chứng: venv sạch + ba gói này -> `pytest tests/` xanh toàn bộ.
+#
+# (Bản trước liệt kê google-genai, openai, anthropic — tải về ~100MB mà không
+#  dòng code nào import tới. Đã bỏ.)
+
 requests
+python-dotenv
 pytest

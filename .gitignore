@@ -6,3 +6,9 @@ __pycache__/
 env/
 venv/
 data/
+
+# Cache thô của run_tests.py (dùng cho --merge), không cần commit
+docs/.test_results_cache.json
+
+# Phiên demo web (sinh khi chạy), không cần commit
+data/sessions/
