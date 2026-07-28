@@ -51,6 +51,48 @@ def khong_ngu_that(monkeypatch):
     return da_ngu
 
 
+@pytest.fixture(autouse=True)
+def khong_goi_mang_that(monkeypatch):
+    """Chặn MỌI lời gọi mạng ra LLM trong toàn bộ bộ test.
+
+    Trước đây bộ test "không tốn quota" chỉ vì tình cờ: `.env` không có
+    `GROQ_API_KEY`/`GEMINI_API_KEY` nên provider tự chết trước khi kịp gọi mạng.
+    Nay `.env` có `OPENAI_API_KEY` thật và `providers` đã biết dùng nó, nên cái
+    tình cờ đó biến mất — `test_provider_khong_duoc_raise_ma_phai_tra_chuoi_loi`
+    sẽ bắn request thật mỗi lần chạy pytest.
+
+    Fixture này biến "không tốn quota" từ tình cờ thành ràng buộc: xoá key khỏi
+    môi trường VÀ thay `requests.post` bằng bản làm đỏ test ngay nếu bị gọi.
+    """
+    import key_pool
+    import providers
+
+    for ten in ("OPENAI_API_KEY", "GROQ_API_KEY", "GEMINI_API_KEY",
+                "OPENAI_API_KEYS", *[f"OPENAI_API_KEY_{i}" for i in range(2, 11)]):
+        monkeypatch.delenv(ten, raising=False)
+
+    # Pool key là state toàn cục cấp tiến trình — cố ý, vì trạng thái từng key
+    # phải sống xuyên suốt các lời gọi. Nhưng giữa các TEST thì nó là nguồn nhiễm
+    # chéo: test trước đánh dấu key hết quota, test sau tưởng không còn key nào.
+    # Đặt lại None để pool đọc lại biến môi trường mà chính test đó vừa dựng.
+    key_pool.dat_pool_chung(None)
+    monkeypatch.setattr(providers, "GROQ_API_KEY", "", raising=False)
+    monkeypatch.setattr(providers, "GEMINI_API_KEY", "", raising=False)
+    # Cooldown là state toàn cục giữa các test — test trước đánh dấu hết quota
+    # thì test sau bị bỏ qua provider và đỏ oan.
+    monkeypatch.setattr(providers, "_cooldown_until",
+                        {ten: 0.0 for ten in providers.PROVIDER_ORDER})
+
+    def _chan(*args, **kwargs):
+        raise AssertionError(
+            "Test vừa cố gọi mạng thật tới LLM. Test offline phải dùng "
+            "`FakeProvider` (tests/conftest.py) hoặc `MockProvider`. "
+            f"URL bị chặn: {args[0] if args else kwargs.get('url')}"
+        )
+
+    monkeypatch.setattr(providers.requests, "post", _chan)
+
+
 class ToolRecorder:
     """Ghi lại mọi lời gọi tool để test khẳng định được tool nào đã thật sự chạy."""
 
