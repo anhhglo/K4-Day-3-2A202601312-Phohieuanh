@@ -1,0 +1,65 @@
+%% ============================================================================
+%% HYBRID DECISION FLOWCHART — TRỢ LÝ DUYỆT CHI PHÍ DOANH NGHIỆP (Đề tài #8)
+%% Khi nào đi nhánh Chatbot (Cấp 2), khi nào đi nhánh ReAct Agent (Cấp 3).
+%%
+%% Nguyên tắc định tuyến: Chatbot trả lời KIẾN THỨC, Agent trả lời SỐ LIỆU.
+%% Câu nào cần một con số chỉ tồn tại trong hệ thống nội bộ (hạn mức, ngân sách
+%% còn lại, lịch sử đơn) thì buộc phải đi nhánh Agent — Chatbot mà trả lời được
+%% câu đó nghĩa là nó đang bịa.
+%% ============================================================================
+flowchart TD
+    START(["📥 Câu hỏi người dùng"]) --> ROUTER{{"🔀 Câu hỏi có cần<br/>SỐ LIỆU NỘI BỘ không?<br/><br/>Tín hiệu: mã đơn EXP-xxxx ·<br/>cost center CC-xxx · hạn mức ·<br/>ngân sách còn lại · yêu cầu<br/>duyệt/từ chối một đơn"}}
+
+    %% ------------------------------------------------ NHÁNH CHATBOT (CẤP 2)
+    ROUTER -->|"KHÔNG — kiến thức chung"| CB["🤖 CHATBOT PATH (Cấp 2)<br/>CHATBOT_BASELINE_PROMPT<br/>0 tool · 1 lượt gọi LLM"]
+    CB --> CB_OUT["💬 Trả lời từ kiến thức kế toán chung<br/><i>vd: 'Quy trình duyệt chi phí gồm những bước nào?'</i><br/><i>vd: 'Phân biệt chi phí hợp lệ và hợp lý'</i>"]
+    CB_OUT --> DONE(["🏁 Kết thúc"])
+
+    %% ------------------------------------------ NHÁNH REACT AGENT (CẤP 3)
+    ROUTER -->|"CÓ — cần tra hệ thống"| G1{{"🛡️ TẦNG 1 — GUARDRAIL PROMPT<br/>Quy tắc 5: người dùng có đang ép<br/>bỏ qua kiểm tra không?<br/><i>'duyệt luôn' · 'khỏi cần tra' ·<br/>'bỏ qua mọi quy tắc'</i>"}}
+
+    G1 -->|"CÓ — dấu hiệu gian lận"| REFUSE["⛔ TỪ CHỐI, nêu rõ lý do<br/>KHÔNG gọi submit_decision"]
+    REFUSE --> DONE
+
+    G1 -->|"KHÔNG"| LOOP["🧠 VÒNG LẶP ReAct (Cấp 3)<br/>Thought → Action → Observation<br/>MAX_ITERATIONS = 8"]
+
+    LOOP --> OPEN["1️⃣ get_expense_report<br/><i>mở hồ sơ đơn</i>"]
+    OPEN --> PRE["2️⃣ BA TIỀN ĐỀ BẮT BUỘC<br/>get_policy · check_budget<br/>find_duplicate_claims"]
+    PRE --> DOA["3️⃣ get_approval_matrix<br/><i>tra thẩm quyền DoA</i>"]
+
+    DOA --> G2{{"🛡️ TẦNG 2 — GUARDRAIL CODE<br/>TOOL_PRECONDITIONS<br/><br/>Đủ 3 tiền đề GỌI THÀNH CÔNG?<br/>Đúng đơn đã mở hồ sơ?<br/>Chưa từng ghi quyết định?"}}
+
+    G2 -->|"THIẾU / SAI ĐƠN / GHI ĐÈ"| BLOCK["🛑 Chặn ghi<br/>trả chuỗi LỖI làm Observation<br/>guardrail: precondition_violated"]
+    BLOCK --> LOOP
+
+    G2 -->|"ĐỦ CĂN CỨ"| WRITE["4️⃣ submit_decision<br/><i>hành động GHI dữ liệu</i>"]
+
+    WRITE --> VERDICT{{"⚖️ ÁP BẢNG QUY TẮC<br/>ưu tiên khi dính nhiều vi phạm:<br/>REJECTED &gt; ESCALATE &gt;<br/>NEEDS_INFO &gt; APPROVED"}}
+
+    VERDICT --> D1["✅ APPROVED<br/><i>sạch, trong thẩm quyền</i>"]
+
+    VERDICT --> D2["❌ REJECTED<br/><i>vượt hạn mức · quá 30 ngày ·<br/>hết ngân sách · trùng lặp</i>"]
+    VERDICT --> D3["❓ NEEDS_INFO<br/><i>thiếu hoá đơn VAT ·<br/>tiền mặt ≥ 20tr · thiếu pre-approval</i>"]
+    VERDICT --> D4["⬆️ ESCALATE<br/><i>xé nhỏ hoá đơn ·<br/>vượt thẩm quyền DoA</i>"]
+
+    D1 --> DONE
+    D2 --> DONE
+    D3 --> DONE
+    D4 --> DONE
+
+    %% ------------------------------------------- GUARDRAIL PHỤ TRONG VÒNG LẶP
+    LOOP -.->|"gọi lặp cùng tham số"| GR["🛑 GUARDRAIL PHỤ<br/>duplicate_call · unknown_tool<br/>bad_args · parse_error · tool_error<br/><br/>→ trả LỖI làm Observation,<br/>agent tự sửa ở vòng sau"]
+    GR -.-> LOOP
+    LOOP -.->|"chạm trần 8 vòng"| STOP["🛑 max_iterations<br/>dừng với ok = False<br/><i>thà không trả lời còn hơn bịa</i>"]
+    STOP --> DONE
+
+    %% ------------------------------------------------------------- ĐỊNH DẠNG
+    classDef chatbot fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a5f
+    classDef agent fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+    classDef guard fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
+    classDef decision fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f
+
+    class CB,CB_OUT chatbot
+    class LOOP,OPEN,PRE,DOA,WRITE agent
+    class G1,G2,BLOCK,GR,STOP,REFUSE guard
+    class D1,D2,D3,D4,VERDICT decision
