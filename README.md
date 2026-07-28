@@ -32,13 +32,28 @@ Bài Lab giúp bạn hiểu rõ sự tiến hóa qua 4 cấp độ của hệ th
 ├── 📁 src/                      <-- 💻 MÃ NGUỒN PYTHON (BOILERPLATE)
 │   ├── 📄 tools.py              <-- 🛠️ [Role 2] Khai báo các công cụ (Tools)
 │   ├── 📄 prompts.py            <-- 🧠 [Role 3] ReAct System Prompt & Guardrails
-│   └── 📄 app.py                <-- 🚀 [Role 4] Core App ghép nối & chạy ReAct Loop
+│   ├── 📄 app.py                <-- 🚀 [Role 4] Core App ghép nối & chạy ReAct Loop
+│   ├── 📄 providers.py          <-- 🔌 Multi-Provider LLM Adapter
+│   ├── 📄 llm_utils.py          <-- 🔁 Gọi LLM có retry khi hết quota (429)
+│   ├── 📄 run_tests.py          <-- 🧪 [Role 1+5] Chạy 5 test cases & xuất báo cáo
+│   └── 📁 ai_levels/            <-- 📚 Demo 4 cấp độ AI (level4 = 🎁 Bonus Autonomous Agent)
 │
 └── 📁 docs/                     <-- 📚 TÀI LIỆU HƯỚNG DẪN & BÁO CÁO
     ├── 📄 CODELAB.md            <-- 🎓 [LMS Format] Hướng dẫn thực hành từng bước Codelab
     ├── 📄 PHAN_CONG_CONG_VIEC.md <-- 📋 [BẮT ĐẦU TẠI ĐÂY] Sổ tay thực hành & Checklist 5 Roles
     ├── 📄 DANH_SACH_DE_TAI.md    <-- 💡 Danh sách 10 chủ đề gợi ý
-    └── 📄 trace_eval.md          <-- 📊 [Role 5] Báo cáo Log Trace & Đánh giá Agentic Fit
+    ├── 📄 trace_eval.md          <-- 📊 [Role 5] Báo cáo Log Trace & Đánh giá Agentic Fit
+    └── 📄 test_results.md        <-- 🧪 Kết quả 5 test cases (sinh tự động bởi run_tests.py)
+```
+
+### ▶️ Chạy thử
+
+```bash
+python src/app.py                                   # Demo Chatbot Baseline vs ReAct Agent
+python src/run_tests.py                             # Chạy cả 5 test cases, xuất docs/test_results.md
+python src/run_tests.py --cases 3,5 --mode react    # Chạy chọn lọc
+python src/run_tests.py --model gemini-3.5-flash-lite  # Đổi model khi hết quota ngày
+python src/ai_levels/level4_autonomous_agent.py     # 🎁 Bonus: Autonomous Agent (Cấp 4)
 ```
 
 ---

@@ -132,12 +132,25 @@ class OpenRouterProvider(BaseLLMProvider):
 
 
 class MockProvider(BaseLLMProvider):
-    """Offline Mock Provider (Cho bài test không cần kết nối API)"""
+    """Offline Mock Provider (Cho bài test không cần kết nối API).
+
+    Trả kịch bản ReAct đúng định dạng của domain duyệt chi phí, để chạy offline
+    vẫn thấy được vòng lặp Thought → Action → Observation thay vì một câu trả lời
+    cụt lủn.
+    """
     def generate(self, prompt: str, system_prompt: str = "") -> str:
         text = prompt.lower()
-        if "thời tiết" in text and "hà nội" in text:
-            return "Thought: Cần tra cứu thời tiết Hà Nội.\nAction: get_weather['Hà Nội']"
-        return "🤖 [Mock Provider]: Phản hồi giả lập offline cho bài test."
+        # Đã có Observation nghĩa là tool chạy xong — chốt lại thay vì gọi tiếp,
+        # nếu không mock sẽ lặp mãi tới khi chạm trần MAX_ITERATIONS.
+        da_co_observation = "observation:" in text
+        if "exp-" in text and not da_co_observation:
+            return ("Thought: Cần mở hồ sơ đơn chi phí trước khi kết luận.\n"
+                    "Action: get_expense_report[EXP-2026-0142]")
+        if ("chính sách" in text or "hạn mức" in text) and not da_co_observation:
+            return ("Thought: Cần tra chính sách hạng mục.\n"
+                    "Action: get_policy[an_uong]")
+        return ("Thought: Đây là phản hồi giả lập offline.\n"
+                "Final Answer: 🤖 [Mock Provider] Phản hồi giả lập offline cho bài test.")
 
 
 def get_llm_provider(provider_name: str = None) -> BaseLLMProvider:

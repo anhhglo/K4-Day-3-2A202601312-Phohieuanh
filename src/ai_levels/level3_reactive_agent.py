@@ -1,30 +1,27 @@
 """
-🧠 CẤP ĐỘ 3: REACTIVE AGENT (ReAct Agent - Thought -> Action -> Observation)
-Agent biết suy nghĩ, tự ra quyết định gọi Tool thực tế và quan sát kết quả để trả lời.
+🧠 CẤP ĐỘ 3: REACTIVE AGENT (ReAct Loop — Thought → Action → Observation)
+
+Dùng lại ĐÚNG vòng lặp production trong `src/app.py`, không viết bản rút gọn riêng
+— demo mà khác code thật thì demo vô nghĩa.
 """
 
-import json
+import os
+import sys
 
-# Định nghĩa Tool thực tế
-def get_weather(city: str) -> str:
-    return f"Thời tiết tại {city}: 28°C, Nắng nhẹ, Độ ẩm 65%."
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def search_flights(origin: str, destination: str) -> str:
-    return f"Chuyến bay {origin} -> {destination}: Vé VN123 giá 1.500.000 VNĐ."
-
-def reactive_agent_step(user_goal: str):
-    print(f"🎯 Goal: {user_goal}")
-    
-    # Bước 1: Thought & Action gọi weather tool
-    print("\n🧠 [Thought 1]: Cần kiểm tra thời tiết thực tế trước.")
-    print("🛠️ [Action 1] : get_weather('Hà Nội')")
-    obs1 = get_weather("Hà Nội")
-    print(f"👁️ [Observation 1]: {obs1}")
-    
-    # Bước 2: Thought & Final Answer
-    print("\n🧠 [Thought 2]: Đã có dữ liệu thời tiết 28°C nắng nhẹ. Đưa ra câu trả lời.")
-    print(f"🏁 [Final Answer]: Thời tiết Hà Nội hôm nay 28°C nắng nhẹ. Bạn nên mặc áo phông thoáng mát!")
+from app import run_react_agent  # noqa: E402
+from providers import get_llm_provider  # noqa: E402
 
 if __name__ == "__main__":
     print("=== DEMO CẤP ĐỘ 3: REACTIVE AGENT (ReAct Loop) ===")
-    reactive_agent_step("Thời tiết Hà Nội hôm nay thế nào và nên mặc gì?")
+    trace = run_react_agent(
+        "Đơn EXP-2026-0144 có duyệt được không?", get_llm_provider()
+    )
+
+    print(f"\n💡 Đã gọi {len(trace['tools_called'])} tool: "
+          f"{', '.join(trace['tools_called']) or 'không có'}")
+    print(f"   Trong đó thành công: {', '.join(trace['successful_tools']) or 'không có'}")
+    print(f"   Guardrail kích hoạt: {', '.join(sorted(set(trace['guardrails']))) or 'không có'}")
+    print("\n   Khác Cấp 2 ở chỗ: mọi con số trong câu trả lời đều lấy từ Observation thật, "
+          "không phải LLM tự bịa.")
