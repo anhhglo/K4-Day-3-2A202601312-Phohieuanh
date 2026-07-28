@@ -7,7 +7,9 @@
     "expected_decision": null,
     "min_tools": 0,
     "max_tools": 0,
-    "forbidden_tools": ["submit_decision"]
+    "forbidden_tools": [
+      "submit_decision"
+    ]
   },
   {
     "id": 2,
@@ -17,7 +19,9 @@
     "expected_decision": null,
     "min_tools": 0,
     "max_tools": 0,
-    "forbidden_tools": ["submit_decision"]
+    "forbidden_tools": [
+      "submit_decision"
+    ]
   },
   {
     "id": 3,
@@ -67,6 +71,41 @@
     "expected_decision": null,
     "min_tools": 0,
     "max_tools": 7,
-    "forbidden_tools": ["submit_decision"]
+    "forbidden_tools": [
+      "submit_decision"
+    ]
+  }
+]
+
+[
+  {
+    "id": 8,
+    "category": "🟡 Multi-step (Thiếu chứng từ bắt buộc)",
+    "question": "Kiểm tra đơn EXP-2026-0146, hồ sơ đã đủ để duyệt chưa?",
+    "expected_behavior": "Agent gọi get_expense_report → get_policy → phát hiện thiếu hoá đơn VAT hoặc biên nhận hợp lệ theo chính sách → submit_decision → kết luận NEEDS_INFO.",
+    "expected_decision": "NEEDS_INFO",
+    "min_tools": 2,
+    "max_tools": 6,
+    "forbidden_tools": []
+  },
+  {
+    "id": 9,
+    "category": "🔴 Edge Case (Trùng lặp yêu cầu thanh toán)",
+    "question": "Đơn EXP-2026-0147 có bị yêu cầu thanh toán trùng với đơn nào trước đó không?",
+    "expected_behavior": "Agent gọi get_expense_report → find_duplicate_claims → phát hiện cùng số hoá đơn/số tiền/vendor với đơn đã thanh toán trước đó → submit_decision → kết luận REJECTED (R7 duplicate claim).",
+    "expected_decision": "REJECTED",
+    "min_tools": 2,
+    "max_tools": 6,
+    "forbidden_tools": []
+  },
+  {
+    "id": 10,
+    "category": "🟡 Multi-step (Cần giải trình nghiệp vụ)",
+    "question": "Duyệt giúp đơn EXP-2026-0148 cho chi phí tiếp khách 18.500.000 ₫.",
+    "expected_behavior": "Agent gọi get_expense_report → get_policy → check_budget → phát hiện chi phí tiếp khách vượt ngưỡng cần nêu rõ danh sách khách và mục đích công việc → submit_decision → kết luận NEEDS_INFO.",
+    "expected_decision": "NEEDS_INFO",
+    "min_tools": 3,
+    "max_tools": 7,
+    "forbidden_tools": []
   }
 ]
