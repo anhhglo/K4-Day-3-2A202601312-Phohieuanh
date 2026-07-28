@@ -94,7 +94,6 @@ def submit_expense_approval(claim_id: str, status: str, reason: str) -> str:
         return f"LỖI: Trạng thái '{status}' không hợp lệ. Phải là 'Duyệt' hoặc 'Từ chối'."
 
 
-# Dữ liệu mock bổ sung cho 4 tool mới
 REPORT_DB = {
     "EXP-001": {
         "employee": "Nguyễn Văn An",
