@@ -73,15 +73,33 @@ def load_test_cases():
         return json.load(f)
 
 
-def run_baseline_chatbot(user_query: str, provider) -> str:
+def _phat(on_event, loai: str, **du_lieu) -> None:
+    """Bắn một sự kiện cho người quan sát (giao diện web), nếu có ai đăng ký.
+
+    Mặc định `on_event=None` nên `run_react_agent(query, provider)` giữ nguyên
+    hành vi cũ — CLI và toàn bộ test hiện có không phải sửa một dòng nào.
+    """
+    if on_event is None:
+        return
+    try:
+        on_event({"loai": loai, **du_lieu})
+    except Exception as e:  # noqa: BLE001
+        # Giao diện hỏng thì hỏng một mình nó. Vòng lặp ReAct không được chết vì
+        # cái màn hình đang xem nó.
+        print(f"⚠️ [Observer] Bỏ qua lỗi khi phát sự kiện '{loai}': {e}")
+
+
+def run_baseline_chatbot(user_query: str, provider, on_event=None) -> str:
     """
     Dựng Chatbot gốc (Baseline) không có công cụ.
     """
     print(f"\n💬 [CHATBOT BASELINE] Câu hỏi: {user_query}")
+    _phat(on_event, "bat_dau", che_do="chatbot", cau_hoi=user_query)
 
     # Gọi LLM Provider thực hiện sinh câu trả lời
     response = call_llm(provider, user_query, system_prompt=CHATBOT_BASELINE_PROMPT)
     print(f"🤖 Chatbot trả lời:\n{response}")
+    _phat(on_event, "ket_luan", noi_dung=response, ok=not is_provider_error(response))
     return response
 
 
@@ -178,7 +196,7 @@ def parse_react_output(text: str) -> dict:
     return {"type": "parse_error", "thought": thought, "raw": text.strip()}
 
 
-def run_react_agent(user_query: str, provider) -> dict:
+def run_react_agent(user_query: str, provider, on_event=None) -> dict:
     """
     Dựng vòng lặp ReAct Agent (Thought -> Action -> Observation) có Guardrails.
 
@@ -189,6 +207,8 @@ def run_react_agent(user_query: str, provider) -> dict:
     danh sách tool đã gọi và guardrail nào đã kích hoạt.
     """
     print(f"\n🤖 [REACT AGENT] Câu hỏi: {user_query}")
+    _phat(on_event, "bat_dau", che_do="react", cau_hoi=user_query,
+          max_iterations=MAX_ITERATIONS)
     scratchpad = ""
     seen_calls = set()      # 🛡️ Guardrail chống gọi lặp cùng tool + cùng tham số
     tools_called = []       # mọi tool đã cố gọi
@@ -203,29 +223,38 @@ def run_react_agent(user_query: str, provider) -> dict:
 
     for step in range(1, MAX_ITERATIONS + 1):
         print(f"\n--- 🔄 Vòng lặp ReAct (Step {step}/{MAX_ITERATIONS}) ---")
+        _phat(on_event, "buoc", step=step, tong=MAX_ITERATIONS)
 
         scratchpad, da_cat = _truncate_scratchpad(scratchpad)
         if da_cat and "scratchpad_truncated" not in guardrails:
             guardrails.append("scratchpad_truncated")
+            _phat(on_event, "guardrail", ten="scratchpad_truncated",
+                  thong_diep="Scratchpad quá dài — đã lược bớt phần đầu.")
 
         prompt = f"{REACT_SYSTEM_PROMPT}\nCâu hỏi: {user_query}\n{scratchpad}"
         raw = call_llm(provider, prompt)
         if is_provider_error(raw):
             print(f"❌ Lỗi gọi LLM: {raw}")
             guardrails.append("llm_error")
+            _phat(on_event, "guardrail", ten="llm_error", thong_diep=raw[:300])
+            _phat(on_event, "ket_luan", noi_dung=raw, ok=False)
             return _trace(raw, step, False)
 
         parsed = parse_react_output(raw)
         if parsed["thought"]:
             print(f"🧠 Thought: {parsed['thought']}")
+            _phat(on_event, "thought", noi_dung=parsed["thought"])
 
         if parsed["type"] == "final":
             print(f"🏁 Final Answer: {parsed['answer']}")
+            _phat(on_event, "ket_luan", noi_dung=parsed["answer"], ok=True)
             return _trace(parsed["answer"], step, True)
 
         if parsed["type"] == "parse_error":
             print("⚠️ Output sai định dạng — yêu cầu LLM làm lại đúng khuôn.")
             guardrails.append("parse_error")
+            _phat(on_event, "guardrail", ten="parse_error",
+                  thong_diep="LLM trả sai khuôn Thought/Action — yêu cầu làm lại.")
             scratchpad += (
                 "\nObservation: LỖI ĐỊNH DẠNG. Bạn phải trả lời theo đúng khuôn "
                 "'Thought: ... / Action: tên_tool[tham_số]' hoặc 'Thought: ... / Final Answer: ...'.\n"
@@ -234,7 +263,9 @@ def run_react_agent(user_query: str, provider) -> dict:
 
         tool_name, args = parsed["tool"], parsed["args"]
         print(f"🛠️ Action: {tool_name}[{', '.join(args)}]")
+        _phat(on_event, "action", tool=tool_name, args=args)
 
+        so_guardrail_truoc = len(guardrails)
         signature = f"{tool_name}::{'|'.join(a.lower() for a in args)}"
         subject = args[0].strip().upper() if args else ""
         # Tiền đề xét trên successful_tools, KHÔNG phải tools_called — xem chú
@@ -289,17 +320,24 @@ def run_react_agent(user_query: str, provider) -> dict:
                 guardrails.append("bad_args")
 
         print(f"👁️ Observation: {observation}")
+        # Guardrail nào vừa kích hoạt ở khối trên thì phát ra đúng cái đó. So sánh
+        # độ dài để biết vòng này có thêm guardrail mới hay không.
+        if len(guardrails) > so_guardrail_truoc:
+            for ten in guardrails[so_guardrail_truoc:]:
+                _phat(on_event, "guardrail", ten=ten, thong_diep=observation[:300])
+        _phat(on_event, "observation", noi_dung=observation,
+              thanh_cong=not observation.startswith("LỖI"))
         scratchpad += f"\nThought: {parsed['thought']}\nAction: {tool_name}[{', '.join(args)}]\nObservation: {observation}\n"
 
     # 🛡️ Hết số vòng cho phép mà chưa có Final Answer
     print(f"🛡️ GUARDRAIL TRIGGERED: Đã đạt giới hạn tối đa {MAX_ITERATIONS} bước. Ngắt lặp an toàn!")
     guardrails.append("max_iterations")
-    return _trace(
-        f"⚠️ Agent đã dùng hết {MAX_ITERATIONS} bước suy luận mà chưa kết luận được. "
-        f"Vui lòng đặt lại câu hỏi cụ thể hơn.",
-        MAX_ITERATIONS,
-        False,
-    )
+    _phat(on_event, "guardrail", ten="max_iterations",
+          thong_diep=f"Chạm trần {MAX_ITERATIONS} bước — ngắt lặp an toàn.")
+    het_buoc = (f"⚠️ Agent đã dùng hết {MAX_ITERATIONS} bước suy luận mà chưa kết luận được. "
+                f"Vui lòng đặt lại câu hỏi cụ thể hơn.")
+    _phat(on_event, "ket_luan", noi_dung=het_buoc, ok=False)
+    return _trace(het_buoc, MAX_ITERATIONS, False)
 
 
 if __name__ == "__main__":
